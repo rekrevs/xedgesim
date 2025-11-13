@@ -1,0 +1,21 @@
+# P0 placeholder configuration for the vibration monitoring scenario.
+# This file will be extended in later phases (P3+).
+
+scenario_name: "vibration_monitoring_p0"
+description: "Placeholder configuration; no actual simulation bindings yet."
+
+duration_s: 0
+num_devices: 0
+device_firmware: ""
+
+network:
+  type: "none"
+
+edge:
+  containers: []
+
+cloud:
+  enabled: false
+
+ml_placement:
+  mode: "none"

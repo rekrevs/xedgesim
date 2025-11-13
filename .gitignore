@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/
+
+# Build / results
+build/
+dist/
+results/raw_logs/
+results/processed/
+
+# LaTeX
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.bbl
+paper/*.blg
+paper/*.synctex.gz
+
+# Misc
+*.swp
+*.swo
