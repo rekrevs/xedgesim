@@ -7,7 +7,7 @@
 
 This document serves as the primary architectural reference for xEdgeSim, guiding design decisions and implementation across all development phases (M0-M4). It consolidates analysis of federated co-simulation approaches, determinism strategies, and implementation considerations for heterogeneous IoT-edge-cloud systems.
 
-**Important**: This is a **comprehensive long-term architecture** document. While all sections are important for understanding xEdgeSim's full vision, **not all features are implemented simultaneously**. See **Section 2: Implementation Philosophy** below for guidance on phased complexity growth and minimal M0 scope.
+**Important**: This is a **comprehensive long-term architecture** document. While all sections are important for understanding xEdgeSim's full vision, **not all features are implemented simultaneously**. Refer to **Section 2: Implementation Philosophy** below for guidance on phased complexity growth and minimal M0 scope.
 
 **Companion Document**: For feature-specific implementation details (ML placement, metrics, ns-3/Docker integration, deployability, CI/CD, scalability), see `docs/implementation-guide.md`.
 
@@ -17,7 +17,7 @@ This document serves as the primary architectural reference for xEdgeSim, guidin
 
 1. [Executive Summary](#1-executive-summary)
 2. [Implementation Philosophy: Iterative Complexity Growth](#2-implementation-philosophy-iterative-complexity-growth)
-3. [Background: Why Federated Co-Simulation?](#3-background-why-federated-co-simulation)
+3. [Background: Rationale for Federated Co-Simulation](#3-background-rationale-for-federated-co-simulation)
 4. [Understanding Time Models and Determinism](#4-understanding-time-models-and-determinism)
 5. [The Tiered Determinism Solution](#5-the-tiered-determinism-solution)
 6. [Component Integration Details](#6-component-integration-details)
@@ -43,17 +43,17 @@ This document serves as the primary architectural reference for xEdgeSim, guidin
 
 ## 1. Executive Summary
 
-### The Core Question
+### Core Objective
 
-Can we build a simulator that provides:
+The objective is to build a simulator that provides:
 - **Cycle-accurate device emulation** (Renode for ARM firmware)
 - **Realistic network simulation** (ns-3 for protocols)
 - **Deployable edge services** (Docker containers)
-- **All coordinated via sockets with deterministic time synchronization**?
+- **All coordinated via sockets with deterministic time synchronization**
 
-### The Answer
+### Solution Approach
 
-**YES**, using **federated co-simulation** with **tiered determinism**:
+This objective is achievable using **federated co-simulation** with **tiered determinism**:
 
 - **Tier 1 (Device/Network)**: Fully deterministic, cycle/timing-accurate
 - **Tier 2 (Edge)**: Statistical reproducibility OR deterministic models (user choice)
@@ -71,7 +71,7 @@ This architecture is validated by SimBricks (datacenter systems) and adapts prov
 
 ### Implementation Philosophy: Elegance Through Restraint
 
-**Critical Insight**: While this document describes xEdgeSim's complete architecture, **not all features are implemented simultaneously**. Attempting to deliver all objectives at once risks analysis paralysis and over-engineering.
+**Critical Insight**: While this document describes xEdgeSim's complete architecture, **not all features are implemented simultaneously**. Attempting to deliver all objectives simultaneously risks analysis paralysis and over-engineering.
 
 **Phased Approach**:
 - **M0 (2 weeks, ~450 LOC)**: Minimal proof-of-concept - Coordinator + Renode + Python edge model
@@ -84,10 +84,10 @@ This architecture is validated by SimBricks (datacenter systems) and adapts prov
 
 **Guiding Principles**:
 1. **Do One Thing Well**: Coordinator only coordinates time; components handle their own concerns
-2. **Defer Decisions**: Don't commit to technologies until validated by real implementation
+2. **Defer Decisions**: Do not commit to technologies until validated by real implementation
 3. **Make It Work, Make It Right, Make It Fast**: M0 proves → M1-M2 refine → M3-M4 optimize
 
-See **Section 2** below for detailed rationale and implementation strategies.
+Refer to **Section 2** below for detailed rationale and implementation strategies.
 
 ---
 
@@ -97,7 +97,7 @@ See **Section 2** below for detailed rationale and implementation strategies.
 
 This architecture document is comprehensive (3,874+ lines across 21 sections), covering everything from basic time synchronization to ML placement frameworks, CI/CD integration, and scalability strategies. This completeness is valuable for understanding xEdgeSim's full vision but creates a risk: **implementation paralysis**.
 
-**The Problem**: Attempting to implement all objectives simultaneously leads to:
+**The Problem**: Attempting to implement all objectives simultaneously results in:
 - Cognitive overload for implementers
 - Risk of over-engineering early milestones
 - Loss of focus on core differentiators
@@ -108,7 +108,7 @@ This architecture document is comprehensive (3,874+ lines across 21 sections), c
 
 ### 2.2 Core vs. Peripheral Objectives
 
-To avoid complexity paralysis, we must distinguish essential from deferrable objectives:
+To avoid complexity paralysis, it is necessary to distinguish essential from deferrable objectives:
 
 | Objective | Classification | Rationale |
 |-----------|---------------|-----------|
@@ -225,9 +225,9 @@ func (c *Coordinator) Run(duration uint64) {
 
 #### Strategy 2: Metrics are Just Files
 
-**Problem**: Building hierarchical metrics collection framework into coordinator.
+**Problem**: Building a hierarchical metrics collection framework into the coordinator.
 
-**Solution**: Components write CSV files. Post-processing joins them.
+**Solution**: Components write CSV files. Post-processing operations join them.
 
 ```python
 # Post-processing (~50 lines):
@@ -240,7 +240,7 @@ merged = pd.merge(merged, edge, on='time_us')
 merged['end_to_end_latency'] = merged['edge_rx_time'] - merged['device_tx_time']
 ```
 
-**Impact**: Coordinator doesn't aggregate metrics. Simple file I/O.
+**Impact**: Coordinator does not aggregate metrics. Simple file I/O operations are used.
 
 #### Strategy 3: Skip ns-3 in M0
 
@@ -275,7 +275,7 @@ class MQTTGatewayModel:
 
 **Problem**: Premature YAML schema design.
 
-**Solution**: M0 hardcoded, M1 simple YAML, M3 full schema if needed.
+**Solution**: M0 uses hardcoded configuration, M1 introduces simple YAML, M3 implements full schema if needed.
 
 ```go
 // M0: Hardcoded config (~10 lines)
@@ -291,7 +291,7 @@ config := SimConfig{
 
 #### The "Node" Abstraction
 
-Everything is a **Node**. A node can:
+All components are represented as **Nodes**. A node can:
 1. Advance simulated time
 2. Communicate via sockets
 3. Report when ready
@@ -304,7 +304,7 @@ type Node interface {
 }
 ```
 
-Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. Type-agnostic.
+The coordinator does not distinguish between Renode, ns-3, Docker, or Python models. The design is type-agnostic.
 
 ### 2.6 Design Principles
 
@@ -312,17 +312,17 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 
 2. **Defer Decisions**: Language choice (Go vs Python), Docker vs models, variable fidelity - decide when validated.
 
-3. **Convention Over Configuration**: Sensible defaults, hardcode what's common, defer YAML schemas.
+3. **Convention Over Configuration**: Sensible defaults, hardcode what is common, defer YAML schemas.
 
 4. **Composition Over Inheritance**: Everything is a Node. Nodes compose. No complex type hierarchies.
 
 5. **Make It Work, Make It Right, Make It Fast**: M0 proves → M1-M2 refine → M3-M4 optimize.
 
-6. **YAGNI (You Aren't Gonna Need It)**: Don't build fault injection unless users ask. Don't build variable fidelity unless needed for a paper.
+6. **YAGNI (You Are Not Going to Need It)**: Do not build fault injection unless users request it. Do not build variable fidelity unless needed for a paper.
 
 7. **Worse Is Better**: Simple, working system beats complex, perfect system. Ship M0 with limitations, iterate.
 
-### 2.7 How to Use This Document
+### 2.7 Document Usage Guidelines
 
 **For M0 Implementation**:
 - Read sections 1-2 (this), 3-7 (core architecture), 11 (roadmap)
@@ -361,9 +361,9 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 
 **M0 Success**:
 - ✅ Coordinator synchronizes Renode + Python model
-- ✅ Deterministic execution validated (same input = same output)
+- ✅ Deterministic execution validated (identical input yields identical output)
 - ✅ Metrics collected and analyzed
-- ✅ Blog post: "We built xEdgeSim M0 in 2 weeks"
+- ✅ Blog post: "xEdgeSim M0 built in 2 weeks"
 
 **M1 Success**:
 - ✅ ns-3 integrated, realistic network simulation
@@ -387,7 +387,7 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 
 ---
 
-## 3. Background: Why Federated Co-Simulation?
+## 3. Background: Rationale for Federated Co-Simulation
 
 ### 3.1 COOJA's Monolithic Architecture (The Problem)
 
@@ -407,14 +407,14 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 ```
 
 **Limitations**:
-- Tight coupling: GUI, simulation, emulation in one process
+- Tight coupling: GUI, simulation, emulation in a single process
 - Single language: Java (or C via fragile JNI)
 - Monolithic time: One event queue, one clock
-- Cannot integrate external tools (ns-3, Docker)
-- Cannot distribute simulation across machines
-- Hard to extend: Adding capabilities requires Java plugins
+- External tool integration not possible (ns-3, Docker)
+- Simulation cannot be distributed across machines
+- Difficult to extend: Adding capabilities requires Java plugins
 
-### 2.2 Proposed Federated Architecture (The Solution)
+### 3.2 Proposed Federated Architecture (The Solution)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -448,7 +448,7 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 - **Extensible**: Add components by implementing socket protocol
 - **Optional GUI**: Web-based dashboard or CLI, separate from engine
 
-### 2.3 Benefits Over Monolithic Approach
+### 3.3 Benefits Over Monolithic Approach
 
 | Aspect | Monolithic (COOJA) | Federated (xEdgeSim) |
 |--------|-------------------|---------------------|
@@ -465,7 +465,7 @@ Coordinator doesn't distinguish between Renode, ns-3, Docker, or Python models. 
 
 ### 4.1 The Fundamental Challenge
 
-We need to coordinate fundamentally different time models:
+The system must coordinate fundamentally different time models:
 
 | Component | Time Model | Deterministic? | Pausable? | Accuracy Level |
 |-----------|------------|----------------|-----------|----------------|
@@ -474,9 +474,9 @@ We need to coordinate fundamentally different time models:
 | **Python models** | Virtual (if controlled) | ✅ Yes | ✅ Yes | ❌ Abstract |
 | **Docker** | **Wall-clock** | ❌ No | ⚠️ Hard | ❌ Not applicable |
 
-**The Core Problem**: Fundamental incompatibility between virtual time (Renode, ns-3) and wall-clock time (Docker containers).
+**The Core Challenge**: Fundamental incompatibility exists between virtual time (Renode, ns-3) and wall-clock time (Docker containers).
 
-### 4.2 Why Docker is Problematic
+### 4.2 Docker Challenges
 
 Docker containers are **real Linux processes**:
 
@@ -490,9 +490,9 @@ Real Process Characteristics:
 ```
 
 **Consequences**:
-1. **Cannot pause cleanly**: Stopping a container doesn't freeze its time perception
-2. **Cannot single-step**: No concept of "advance by 1ms of virtual time"
-3. **Non-deterministic**: Same inputs ≠ same outputs (scheduling, I/O races)
+1. **Cannot pause cleanly**: Stopping a container does not freeze its time perception
+2. **Cannot single-step**: No concept of "advance by 1ms of virtual time" exists
+3. **Non-deterministic**: Identical inputs do not yield identical outputs (scheduling, I/O races)
 
 ### 4.3 Historical Approaches and Lessons Learned
 
@@ -515,7 +515,7 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp) {
 - ❌ Complex: LD_PRELOAD or kernel modifications
 - ❌ Fragile: VDSO, RDTSC bypass interception
 - ❌ Maintenance burden: Must track kernel changes
-- ❌ Incomplete: Can't intercept all time sources
+- ❌ Incomplete: Cannot intercept all time sources
 - ❌ Performance: Overhead on every syscall
 
 **Lesson**: Avoid time interception; use architectural solutions.
@@ -524,9 +524,9 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp) {
 
 **Concept**: Record container behavior in testbed, replay in simulation.
 
-**Why it's insufficient**:
+**Why it is insufficient**:
 - ❌ Inflexible: Cannot test new scenarios
-- ❌ Not deployable: Trace ≠ real container
+- ❌ Not deployable: Trace does not equal real container
 
 #### Approach 3: Accept Non-Determinism (Recommended)
 
@@ -551,18 +551,18 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp) {
 
 ## 5. The Tiered Determinism Solution
 
-### 4.1 Key Insight: Different Tiers Have Different Requirements
+### 5.1 Key Insight: Different Tiers Have Different Requirements
 
-| Tier | What We're Testing | Determinism Needed? | Why? |
-|------|-------------------|---------------------|------|
+| Tier | What is Tested | Determinism Required? | Rationale |
+|------|----------------|----------------------|-----------|
 | **Device** | Firmware timing, race conditions, protocol correctness | ✅ **Full** | Debug protocol bugs, find firmware races |
 | **Network** | Packet loss, latency, protocol behavior | ✅ **Full** | Deterministic protocol testing |
 | **Edge** | Service behavior, processing latency | ⚠️ **Statistical** | Real deployments have variance |
-| **Cloud** | High-level responses | ⚠️ **Abstract** | Latency varies in real cloud anyway |
+| **Cloud** | High-level responses | ⚠️ **Abstract** | Latency varies in real cloud environments |
 
-**Implication**: We don't need uniform determinism across all tiers.
+**Implication**: Uniform determinism across all tiers is not required.
 
-### 4.2 Hybrid Determinism Architecture
+### 5.2 Hybrid Determinism Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -584,7 +584,7 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp) {
   Time      Time       Time       Time
 ```
 
-### 4.3 Determinism Guarantees Per Tier
+### 5.3 Determinism Guarantees Per Tier
 
 **Tier 1: Full Determinism (Device + Network)**
 - **Renode**: Cycle-accurate, virtual time, seeded RNG
@@ -642,7 +642,7 @@ Both Go and Python are viable candidates for the coordinator:
 
 ### 5.2 Renode Integration (Tier 1)
 
-**Note**: Code examples below use Go for illustration, but the same interfaces can be implemented in Python using asyncio and sockets.
+**Note**: The code examples below use Go for illustration purposes, but the same interfaces can be implemented in Python using asyncio and sockets.
 
 **Control Interface**:
 
@@ -711,7 +711,7 @@ func (r *RenodeNode) execute(command string) error {
 
 **Guarantees**:
 - ✅ Cycle-accurate execution
-- ✅ Fully deterministic (virtual time + seeded RNG)
+- ✅ Fully deterministic (virtual time combined with seeded RNG)
 - ✅ Socket-based control (monitor protocol)
 
 ### 5.3 ns-3 Integration (Tier 1)
@@ -777,7 +777,7 @@ class DockerNode:
 ```
 
 **Guarantees**:
-- ⚠️ Statistical reproducibility (run N times, report mean ± CI)
+- ⚠️ Statistical reproducibility (run N trials, report mean ± confidence interval)
 - ❌ Not cycle-accurate
 - ✅ Deployable (real containers)
 
@@ -817,8 +817,8 @@ class MQTTBrokerModel:
 
 **Guarantees**:
 - ✅ Fully deterministic
-- ✅ Fast
-- ❌ Not deployable (model ≠ real service)
+- ✅ Fast execution
+- ❌ Not deployable (model does not equal real service)
 
 ### 5.6 Communication Protocol
 
@@ -852,13 +852,13 @@ class MQTTBrokerModel:
 - **ZeroMQ**: Better pub/sub, message queuing
 - **gRPC**: Structured, auto-generated bindings
 
-**Recommendation**: Start with raw TCP sockets, migrate to ZeroMQ if needed.
+**Recommendation**: Begin with raw TCP sockets, migrate to ZeroMQ if required.
 
 ---
 
 ## 7. Conservative Synchronous Lockstep Algorithm
 
-### 6.1 Core Algorithm
+### 7.1 Core Algorithm
 
 ```go
 type Coordinator struct {
@@ -932,26 +932,26 @@ func (c *Coordinator) RunSimulation(durationUs uint64) error {
 }
 ```
 
-### 6.2 Properties
+### 7.2 Properties
 
 **Conservative**:
-- Each node never advances beyond target_time
-- No node gets ahead of others
+- Each node never advances beyond the target time
+- No node advances ahead of others
 
 **Synchronous**:
 - All nodes stay within time_quantum of each other
 - Coordinator waits for all before advancing
 
 **Deterministic (for Tier 1)**:
-- Same inputs + same seed → same outputs
-- Renode and ns-3 execute identically each run
+- Identical inputs combined with identical seed yield identical outputs
+- Renode and ns-3 execute identically on each run
 
 **Simple**:
 - No optimistic algorithms
 - No rollback/causality violation handling
 - Easy to debug
 
-### 6.3 Trade-offs
+### 7.3 Trade-offs
 
 **Pros**:
 - ✅ Simple to implement
@@ -960,7 +960,7 @@ func (c *Coordinator) RunSimulation(durationUs uint64) error {
 - ✅ Proven approach (SimBricks, Mosaik)
 
 **Cons**:
-- ❌ Slowest component limits speed (Docker wall-clock is bottleneck)
+- ❌ Slowest component limits overall speed (Docker wall-clock represents the bottleneck)
 - ❌ Coarse time quantum (1ms) may miss fine-grained events
 
 **Mitigations**:
@@ -972,13 +972,13 @@ func (c *Coordinator) RunSimulation(durationUs uint64) error {
 
 ## 8. Achieving Variable-Fidelity Accuracy
 
-### 7.1 What "Accuracy" Means Per Tier
+### 8.1 Definition of "Accuracy" Per Tier
 
 **Device Tier (Renode)**:
 - ✅ **Cycle-accurate**: Instruction-level emulation
-- Each ARM instruction → exact cycle count
-- Can count total cycles: 1,234,567 cycles executed
-- **This is true cycle-accuracy**
+- Each ARM instruction yields exact cycle count
+- Total cycles can be counted: 1,234,567 cycles executed
+- **This represents true cycle-accuracy**
 
 **Network Tier (ns-3)**:
 - ⚠️ **Timing-accurate** (not cycle-accurate)
@@ -989,8 +989,8 @@ func (c *Coordinator) RunSimulation(durationUs uint64) error {
 
 **Edge Tier (Docker/Models)**:
 - **Latency-accurate** (millisecond precision)
-- "MQTT broker forwarding: 2.3ms ± 0.5ms"
-- Cycle-accuracy is overkill
+- Example: "MQTT broker forwarding: 2.3ms ± 0.5ms"
+- Cycle-accuracy represents unnecessary overhead
 - **Sufficient for service evaluation**
 
 **Cloud Tier (Mocks)**:
@@ -998,7 +998,7 @@ func (c *Coordinator) RunSimulation(durationUs uint64) error {
 - High-level latency sufficient
 - **Sufficient for end-to-end experiments**
 
-### 7.2 Variable-Fidelity Visualization
+### 8.2 Variable-Fidelity Visualization
 
 ```
 Abstraction          Fidelity Level
@@ -1016,13 +1016,13 @@ Level
                                                         Detail
 ```
 
-**This is a feature**: Appropriate fidelity per tier minimizes overhead while maintaining accuracy where it matters.
+**This represents a feature**: Appropriate fidelity per tier minimizes overhead while maintaining accuracy where required.
 
 ---
 
 ## 9. Decision Matrix: When to Relax Determinism
 
-### 8.1 Scenario-Based Configuration
+### 9.1 Scenario-Based Configuration
 
 | Scenario | Device | Network | Edge | Cloud | Rationale |
 |----------|--------|---------|------|-------|-----------|
@@ -1031,7 +1031,7 @@ Level
 | **Fault tolerance testing** | Renode (determ) | ns-3 (determ) | Docker (statistical) | Mock (determ) | Edge failures are inherently random |
 | **Large-scale capacity planning** | Model (determ) | ns-3 (determ) | Model (determ) | Mock (determ) | Need speed over device fidelity |
 
-### 8.2 User-Configurable Policy
+### 9.2 User-Configurable Policy
 
 **Phase 1 (M0-M2): YAML Configuration**
 
@@ -1058,11 +1058,11 @@ determinism_policy:
 ```
 
 **User Choice**:
-- Want determinism? Use models for edge
-- Want realism? Use Docker, accept variance
-- Want both? Use Docker for development, models for regression testing
+- For determinism: Use models for edge tier
+- For realism: Use Docker, accept variance
+- For both: Use Docker for development, models for regression testing
 
-### 8.3 Concrete Example: Message Flow with Hybrid Determinism
+### 9.3 Concrete Example: Message Flow with Hybrid Determinism
 
 **Scenario**: Device sends MQTT message → Edge broker → Cloud
 
@@ -1098,15 +1098,15 @@ T=7300μs:
 ... reverse path ...
 ```
 
-**Result**: End-to-end latency = 57.3ms ± 0.5ms
-- Deterministic parts: Device (0μs), Network (5ms), Cloud (50ms)
-- Non-deterministic part: Edge processing (2.3ms ± 0.5ms)
+**Result**: End-to-end latency equals 57.3ms ± 0.5ms
+- Deterministic components: Device (0μs), Network (5ms), Cloud (50ms)
+- Non-deterministic component: Edge processing (2.3ms ± 0.5ms)
 
 ---
 
 ## 10. Validation and Comparison to Existing Systems
 
-### 9.1 SimBricks: Architectural Validation
+### 10.1 SimBricks: Architectural Validation
 
 **SimBricks** (OSDI 2022) uses the same federated approach for datacenter systems:
 - QEMU/gem5 hosts + ns-3 network
@@ -1126,7 +1126,7 @@ T=7300μs:
 
 **Lesson**: SimBricks validates socket-based co-simulation. xEdgeSim adapts it to IoT with hybrid determinism.
 
-### 9.2 Comparison to Monolithic Simulators
+### 10.2 Comparison to Monolithic Simulators
 
 | Aspect | COOJA | iFogSim/EdgeCloudSim | xEdgeSim |
 |--------|-------|---------------------|----------|
@@ -1138,7 +1138,7 @@ T=7300μs:
 | **Determinism** | Full | Full (abstract) | Hybrid (realistic) |
 | **Scalability** | 50-100 nodes | 1000s (abstract) | 10-50 emulated + 1000s modeled |
 
-### 9.3 Co-Simulation Framework Comparisons
+### 10.3 Co-Simulation Framework Comparisons
 
 | Framework | Domain | Key Lesson for xEdgeSim |
 |-----------|--------|------------------------|
@@ -1276,9 +1276,9 @@ T=7300μs:
 **Risk**: Edge container variance makes experiments irreproducible.
 
 **Analysis**:
-- True, but real edge deployments have variance
-- Statistical results (mean ± CI) are scientifically acceptable
-- Can use models for regression testing
+- Accurate assessment, but real edge deployments exhibit variance
+- Statistical results (mean ± confidence interval) are scientifically acceptable
+- Models can be used for regression testing
 
 **Mitigation**:
 - Run N trials (N=10-30), report distributions
@@ -1306,7 +1306,7 @@ T=7300μs:
 
 ## 13. Recommendations
 
-### 12.1 For M0-M2 (MVP)
+### 13.1 For M0-M2 (MVP)
 
 1. **Choose coordinator language during M0**
    - Both Go and Python are viable candidates
@@ -1333,7 +1333,7 @@ T=7300μs:
    - Users choose determinism vs realism
    - Easy to switch between Docker and models
 
-### 12.2 For M3+ (Production)
+### 13.2 For M3+ (Production)
 
 1. **Optimize coordinator performance**
    - Profile socket communication hot paths
@@ -1357,12 +1357,12 @@ T=7300μs:
    - Energy, latency, accuracy tracking
    - Pareto frontier generation
 
-### 12.3 Architectural Principles to Maintain
+### 13.3 Architectural Principles to Maintain
 
 1. **Modularity**: Each component is replaceable
-   - Can swap Renode → QEMU
-   - Can swap ns-3 → OMNeT++
-   - Can swap Docker → Fogify
+   - Renode can be swapped with QEMU
+   - ns-3 can be swapped with OMNeT++
+   - Docker can be swapped with Fogify
 
 2. **Deployability**: Artifacts tested in simulation deploy to production
    - ARM firmware → real hardware
