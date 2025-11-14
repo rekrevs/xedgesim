@@ -1,6 +1,25 @@
 # Language Choice for xEdgeSim Coordinator: Go vs Python
 
 **Date:** 2025-11-13
+**Status:** ⏳ **DECISION PENDING** - Both Go and Python are viable candidates
+
+## Current Status
+
+**The language choice for the simulation coordinator remains open**, with both Go and Python as viable candidates. The decision will be made during M0 implementation based on:
+- Team expertise and experience
+- Development velocity priorities (rapid prototyping vs long-term maintainability)
+- Performance requirements for initial scenarios
+- Accessibility needs for collaborators and users
+
+**Key insight**: The socket-based protocol is language-agnostic, so switching languages later is possible if needed.
+
+**Both languages will be used in xEdgeSim**:
+- **Coordinator**: Go OR Python (to be decided)
+- **Analysis tools**: Python (pandas, numpy, matplotlib)
+- **Experiment harness**: Python scripts
+- **Post-processing**: Python
+
+---
 
 ## The Question
 
@@ -660,21 +679,28 @@ func main() {
 
 ---
 
-### Recommended Strategy
+### Recommended Decision Strategy
 
-**Phase 1 (M0-M1)**: **Python** for rapid prototyping
-- Validate architecture quickly
-- Use asyncio for concurrency
-- Keep coordinator simple (~500 lines)
+**The choice should be made during M0 implementation** based on actual project needs:
 
-**Phase 2 (M2-M3)**: **Evaluate migration to Go**
-- If architecture is stable and working well
-- If performance becomes an issue (large-scale experiments)
-- If deployment complexity is painful
+**Choose Go if**:
+- Team has Go experience or is willing to learn
+- Long-term maintainability and performance are priorities
+- You want compile-time type safety from the start
+- Single binary deployment is valuable for distribution
+- Concurrency patterns with goroutines feel natural to the team
 
-**Phase 3 (M4+)**: **Hybrid approach**
-- Go coordinator (runtime)
-- Python analysis (post-processing)
-- Best of both worlds
+**Choose Python if**:
+- Rapid prototyping and iteration speed are critical
+- Team is primarily Python-focused
+- Easy accessibility for students and collaborators is important
+- You want seamless integration between coordinator and analysis tools
+- You're willing to migrate later if performance becomes an issue
 
-**Bottom line**: Go is a better long-term choice for the coordinator, but Python is pragmatic for MVP. The socket-based protocol enables language-agnostic implementation, so you can switch later.
+**Recommended hybrid approach**:
+- Start with whichever language the team is most productive in
+- Use Python for all analysis regardless of coordinator choice
+- Socket-based protocol ensures language choice doesn't lock you in
+- Evaluate performance at M1 and consider migration if needed
+
+**Bottom line**: Both languages are viable. The decision should prioritize team productivity and project goals over theoretical performance differences. The architecture supports either choice equally well.
