@@ -91,14 +91,15 @@ class DockerProtocolAdapter(NodeAdapter):
 
             # Attach to container with stdin/stdout
             # -i: Keep stdin open
+            # -u: Run Python in unbuffered mode (critical for stdin/stdout protocol)
             # Container entrypoint should be running the service with protocol adapter
             self.process = subprocess.Popen(
-                ['docker', 'exec', '-i', self.container_id, 'python', '-m', 'service'],
+                ['docker', 'exec', '-i', self.container_id, 'python', '-u', '-m', 'service'],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1  # Line buffered
+                bufsize=0  # Unbuffered for real-time communication
             )
 
             self.connected = True
@@ -157,7 +158,9 @@ class DockerProtocolAdapter(NodeAdapter):
             raise RuntimeError(f"Not connected to container {self.container_id}")
 
         # Send ADVANCE with target time
-        self._write_line(f"ADVANCE {target_time_us}")
+        advance_cmd = f"ADVANCE {target_time_us}"
+        print(f"[DockerProtocolAdapter] Sending: {advance_cmd}")
+        self._write_line(advance_cmd)
 
         # Send events JSON
         # Convert Event dataclass to dict
@@ -172,6 +175,7 @@ class DockerProtocolAdapter(NodeAdapter):
             })
 
         events_json = json.dumps(events_data)
+        print(f"[DockerProtocolAdapter] Sending events: {events_json[:100]}{'...' if len(events_json) > 100 else ''}")
         self._write_line(events_json)
 
     def wait_done(self) -> List[Event]:
@@ -192,7 +196,10 @@ class DockerProtocolAdapter(NodeAdapter):
             raise RuntimeError(f"Not connected to container {self.container_id}")
 
         # Wait for DONE response
+        print(f"[DockerProtocolAdapter] Waiting for DONE response...")
         response = self._read_line(timeout=30.0)  # 30s timeout for container processing
+        print(f"[DockerProtocolAdapter] Received: {response}")
+
         if response != "DONE":
             stderr_output = self._read_stderr()
             raise RuntimeError(
@@ -201,7 +208,9 @@ class DockerProtocolAdapter(NodeAdapter):
             )
 
         # Read events JSON
+        print(f"[DockerProtocolAdapter] Waiting for events JSON...")
         events_json = self._read_line()
+        print(f"[DockerProtocolAdapter] Received events: {events_json[:100]}{'...' if len(events_json) > 100 else ''}")
         events_data = json.loads(events_json)
 
         # Convert to Event objects
@@ -216,6 +225,7 @@ class DockerProtocolAdapter(NodeAdapter):
                 payload=e.get('payload')
             ))
 
+        print(f"[DockerProtocolAdapter] Received {len(events)} events from container")
         return events
 
     def send_shutdown(self):
@@ -281,12 +291,15 @@ class DockerProtocolAdapter(NodeAdapter):
         import select
 
         start_time = time.time()
+        attempts = 0
 
         while time.time() - start_time < timeout:
             # Check if data available (non-blocking)
             ready, _, _ = select.select([self.process.stdout], [], [], 0.1)
+            attempts += 1
 
             if ready:
+                print(f"[DockerProtocolAdapter] Data available on stdout after {attempts} attempts ({time.time() - start_time:.2f}s)")
                 line = self.process.stdout.readline()
                 if not line:
                     # EOF
@@ -306,8 +319,14 @@ class DockerProtocolAdapter(NodeAdapter):
                     f"Container stderr: {stderr_output}"
                 )
 
+            # Log progress every 5 seconds
+            if attempts % 50 == 0:  # 50 * 0.1s = 5s
+                elapsed = time.time() - start_time
+                print(f"[DockerProtocolAdapter] Still waiting for stdout... ({elapsed:.1f}s elapsed)")
+
         # Timeout
         stderr_output = self._read_stderr()
+        print(f"[DockerProtocolAdapter] TIMEOUT after {time.time() - start_time:.2f}s, {attempts} attempts")
         raise RuntimeError(
             f"Timeout waiting for response from container {self.node_id}\n"
             f"Container stderr: {stderr_output}"
