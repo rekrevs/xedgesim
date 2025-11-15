@@ -44,6 +44,7 @@ import yaml
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+import os
 
 
 @dataclass
@@ -88,6 +89,54 @@ class NetworkConfig:
 
 
 @dataclass
+class MLInferenceConfig:
+    """
+    ML inference configuration (M3c).
+
+    Attributes:
+        placement: Inference placement location ("edge" or "cloud")
+        edge_config: Configuration for edge ML inference (if placement=edge)
+        cloud_config: Configuration for cloud ML inference (if placement=cloud)
+    """
+    placement: str
+    edge_config: Optional[Dict[str, Any]] = None
+    cloud_config: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        """Validate ML inference configuration."""
+        # Validate placement value
+        if self.placement not in ["edge", "cloud"]:
+            raise ValueError(f"ml_inference.placement must be 'edge' or 'cloud', got '{self.placement}'")
+
+        # Validate required config sections
+        if self.placement == "edge":
+            if self.edge_config is None:
+                raise ValueError("ml_inference.placement='edge' requires 'edge_config' section")
+
+            # Validate edge_config has required fields
+            if 'model_path' not in self.edge_config:
+                raise ValueError("ml_inference.edge_config must specify 'model_path'")
+
+            # Validate model file exists
+            model_path = self.edge_config['model_path']
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Edge ML model not found: {model_path}")
+
+        if self.placement == "cloud":
+            if self.cloud_config is None:
+                raise ValueError("ml_inference.placement='cloud' requires 'cloud_config' section")
+
+            # Validate cloud_config has required fields
+            if 'model_path' not in self.cloud_config:
+                raise ValueError("ml_inference.cloud_config must specify 'model_path'")
+
+            # Validate model file exists
+            model_path = self.cloud_config['model_path']
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Cloud ML model not found: {model_path}")
+
+
+@dataclass
 class Scenario:
     """
     Simulation scenario configuration.
@@ -98,12 +147,14 @@ class Scenario:
         time_quantum_us: Time step size in microseconds
         nodes: List of node configurations (dicts with id, type, port)
         network: Optional network configuration (M1d)
+        ml_inference: Optional ML inference configuration (M3c)
     """
     duration_s: float
     seed: int
     time_quantum_us: int
     nodes: List[Dict[str, Any]]
     network: Optional[NetworkConfig] = None
+    ml_inference: Optional[MLInferenceConfig] = None  # M3c
 
     def __post_init__(self):
         """Validate scenario after initialization."""
@@ -272,11 +323,36 @@ def load_scenario(yaml_path: str) -> Scenario:
             links=links
         )
 
+    # Parse ML inference configuration (M3c - optional)
+    ml_inference_config = None
+    if 'ml_inference' in data:
+        ml = data['ml_inference']
+        if not isinstance(ml, dict):
+            raise ValueError("'ml_inference' section must be a dict")
+
+        # Parse placement
+        if 'placement' not in ml:
+            raise ValueError("ml_inference section must specify 'placement'")
+
+        placement = ml['placement']
+
+        # Parse configs
+        edge_config = ml.get('edge_config')
+        cloud_config = ml.get('cloud_config')
+
+        # MLInferenceConfig.__post_init__ will validate required fields
+        ml_inference_config = MLInferenceConfig(
+            placement=placement,
+            edge_config=edge_config,
+            cloud_config=cloud_config
+        )
+
     # Create and return scenario
     return Scenario(
         duration_s=float(duration_s),
         seed=int(seed),
         time_quantum_us=int(time_quantum_us),
         nodes=validated_nodes,
-        network=network_config
+        network=network_config,
+        ml_inference=ml_inference_config  # M3c
     )
