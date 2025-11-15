@@ -37,7 +37,7 @@ class SimpleAnomalyDetector(nn.Module):
         return x
 
 
-def create_model(output_path="models/anomaly_detector.onnx", input_dim=32):
+def create_onnx_model(output_path="models/anomaly_detector.onnx", input_dim=32):
     """
     Create and export ONNX model.
 
@@ -45,7 +45,7 @@ def create_model(output_path="models/anomaly_detector.onnx", input_dim=32):
         output_path: Path to save ONNX model
         input_dim: Input feature dimension
     """
-    print(f"Creating simple anomaly detector model...")
+    print(f"Creating ONNX model...")
     print(f"  Input dimension: {input_dim}")
     print(f"  Hidden dimension: 16")
     print(f"  Output: Single probability (0-1)")
@@ -72,7 +72,7 @@ def create_model(output_path="models/anomaly_detector.onnx", input_dim=32):
         opset_version=11
     )
 
-    print(f"✓ Model saved to {output_path}")
+    print(f"✓ ONNX model saved to {output_path}")
 
     # Test the model with ONNX Runtime
     try:
@@ -94,11 +94,50 @@ def create_model(output_path="models/anomaly_detector.onnx", input_dim=32):
         result = session.run([output_name], {input_name: test_input})
 
         print(f"  Test inference: {result[0][0][0]:.4f}")
-        print("✓ Model validation successful")
+        print("✓ ONNX model validation successful")
 
     except ImportError:
         print("\nWarning: onnxruntime not installed, skipping validation")
         print("Install with: pip install onnxruntime")
+
+
+def create_pytorch_model(output_path="models/anomaly_detector.pt", input_dim=32):
+    """
+    Create and save PyTorch model.
+
+    Args:
+        output_path: Path to save PyTorch model
+        input_dim: Input feature dimension
+    """
+    print(f"\nCreating PyTorch model...")
+    print(f"  Input dimension: {input_dim}")
+    print(f"  Hidden dimension: 16")
+    print(f"  Output: Single probability (0-1)")
+
+    # Create model
+    model = SimpleAnomalyDetector(input_dim=input_dim)
+    model.eval()
+
+    # Save PyTorch model
+    print(f"\nSaving PyTorch model: {output_path}")
+    torch.save(model, output_path)
+
+    print(f"✓ PyTorch model saved to {output_path}")
+
+    # Test the model with PyTorch
+    print("\nValidating PyTorch model...")
+
+    # Load model
+    loaded_model = torch.load(output_path)
+    loaded_model.eval()
+
+    # Test inference
+    test_input = torch.randn(1, input_dim)
+    with torch.no_grad():
+        result = loaded_model(test_input)
+
+    print(f"  Test inference: {result.item():.4f}")
+    print("✓ PyTorch model validation successful")
 
 
 if __name__ == "__main__":
@@ -107,7 +146,18 @@ if __name__ == "__main__":
     # Ensure models directory exists
     os.makedirs("models", exist_ok=True)
 
-    # Create model
-    create_model()
+    print("=" * 60)
+    print("Creating Test Models for ML Inference Framework")
+    print("=" * 60)
 
-    print("\nModel ready for ML inference testing!")
+    # Create ONNX model (for M3a edge tier)
+    create_onnx_model()
+
+    # Create PyTorch model (for M3b cloud tier)
+    create_pytorch_model()
+
+    print("\n" + "=" * 60)
+    print("✓ Both models ready for ML inference testing!")
+    print("  - Edge tier (ONNX):  models/anomaly_detector.onnx")
+    print("  - Cloud tier (PyTorch): models/anomaly_detector.pt")
+    print("=" * 60)
