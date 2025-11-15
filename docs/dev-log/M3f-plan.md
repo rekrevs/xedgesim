@@ -186,11 +186,11 @@ M3f is complete when:
 | Minor Stage | Status | Completion Date | Notes |
 |-------------|--------|-----------------|-------|
 | M3fa | ✅ COMPLETE | 2025-11-15 | Renode adapter, 43/43 tests passing, integration tests delegated |
-| M3fb | IN PROGRESS | - | Zephyr firmware |
-| M3fc | PENDING | - | Integration |
+| M3fb | ✅ COMPLETE | 2025-11-15 | Zephyr firmware, 16/16 JSON tests passing, build tests delegated |
+| M3fc | IN PROGRESS | - | Integration |
 | M3fd | PENDING | - | Device ML (optional) |
 
-**Current stage:** M3fb (Zephyr firmware)
+**Current stage:** M3fc (Coordinator integration)
 
 **Last updated:** 2025-11-15
 
@@ -228,6 +228,32 @@ None yet. Will document any scope changes, simplifications, or additions as they
 - Keep firmware minimal - just sensor sampling and UART output
 - Use Zephyr logging subsystem for debug output
 - Test in standalone Renode before coordinator integration
+
+### From M3fb (Zephyr Firmware):
+**What worked well:**
+- Minimal Zephyr configuration (only essential features)
+- Device tree for configuration (Zephyr best practice)
+- Test-first for JSON protocol (16 tests validated format before firmware run)
+- Graceful UART fallback to printk (debugging friendly)
+- Clear UART/printk separation (data vs debug)
+
+**Challenges:**
+- Zephyr learning curve (many config options, distributed docs)
+- Float printf requirement (NEWLIB_LIBC adds ~20KB but necessary)
+- Device tree validation delayed until build time (can't test syntax locally)
+- Can't validate firmware without full Zephyr SDK installation
+
+**Architectural decisions:**
+- Single-threaded firmware (determinism, simplicity)
+- Polling for sensor sampling (no interrupts, deterministic)
+- Newlib libc for float printf (vs minimal libc)
+- Hardcoded seed/interval for PoC (device tree extraction deferred)
+
+**Recommendations for M3fc:**
+- Build tests will validate firmware assumptions - be ready to iterate
+- Device tree seed extraction should be implemented for production
+- Multiple sensor types easy to add (architecture supports it)
+- Consider Zephyr logging macros instead of printk for structured output
 
 ---
 

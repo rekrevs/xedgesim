@@ -1,0 +1,28 @@
+/* xEdgeSim Sensor Node - Device Tree Overlay for nRF52840 DK */
+
+/ {
+	/* RNG configuration for deterministic sensor sampling */
+	rng_config {
+		compatible = "xedgesim,rng-config";
+		label = "RNG_CONFIG";
+		seed = <12345>;  /* Default seed, can be overridden */
+		status = "okay";
+	};
+
+	/* Sensor configuration */
+	sensor_config {
+		compatible = "xedgesim,sensor-config";
+		label = "SENSOR_CONFIG";
+		sample-interval-us = <1000000>;  /* 1 second default */
+		sensor-type = "temperature";
+		min-value = <20000>;  /* 20.0 degrees (fixed-point * 1000) */
+		max-value = <30000>;  /* 30.0 degrees */
+		status = "okay";
+	};
+};
+
+/* Use UART0 for JSON event output (not console) */
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+};
