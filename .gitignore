@@ -21,6 +21,7 @@ results/processed/
 # Test outputs
 test_output_*/
 *_metrics.csv
+metrics  # M3d test metrics directory
 
 # LaTeX
 paper/*.aux
