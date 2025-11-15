@@ -11,6 +11,9 @@ pyyaml>=6.0
 # Docker integration (M2a)
 docker>=7.0.0
 
+# MQTT integration (M2c)
+paho-mqtt>=1.6.1
+
 # Future dependencies (commented out for now)
 # pandas>=2.0  # M3+: Analysis
 # numpy>=1.24  # M3+: Analysis

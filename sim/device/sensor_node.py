@@ -46,16 +46,35 @@ class SensorNode:
     - SHUTDOWN: Clean up
     """
 
-    def __init__(self, port: int):
+    def __init__(self, node_id_or_port, config=None, seed=None):
         """
-        Initialize sensor node server.
+        Initialize sensor node.
+
+        Supports two modes:
+        1. Server mode (M0): SensorNode(port) - runs as standalone process
+        2. Direct mode (M2+): SensorNode(node_id, config, seed) - Python object
 
         Args:
-            port: Port to listen on for coordinator connection
+            node_id_or_port: Port (int) for server mode, or node_id (str) for direct mode
+            config: Configuration dict (direct mode only)
+            seed: Random seed (direct mode only)
         """
-        self.port = port
-        self.node_id = None
-        self.config = {}
+        # Detect mode based on first argument type
+        if isinstance(node_id_or_port, int):
+            # Server mode (M0)
+            self.port = node_id_or_port
+            self.node_id = None
+            self.config = {}
+            self.seed = None
+            self.direct_mode = False
+        else:
+            # Direct mode (M2+)
+            self.port = None
+            self.node_id = node_id_or_port
+            self.config = config or {}
+            self.seed = seed
+            self.direct_mode = True
+
         self.current_time_us = 0
         self.event_queue = []
         self.rng = None
@@ -66,8 +85,27 @@ class SensorNode:
         self.metrics_file = None
         self.metrics_writer = None
 
+        # MQTT support (M2c)
+        self.mqtt_client = None
+
+        # Initialize if in direct mode
+        if self.direct_mode:
+            self._init_direct_mode()
+
+    def _init_direct_mode(self):
+        """Initialize node in direct mode (M2+)."""
+        # Initialize deterministic RNG
+        import hashlib
+        hash_input = f"{self.node_id}_{self.seed}".encode('utf-8')
+        hash_digest = hashlib.sha256(hash_input).digest()
+        rng_seed = int.from_bytes(hash_digest[:8], 'big')
+        self.rng = random.Random(rng_seed)
+
     def start_server(self):
         """Start server and wait for coordinator connection."""
+        if self.direct_mode:
+            raise RuntimeError("Cannot start server in direct mode")
+
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind(('localhost', self.port))
@@ -220,6 +258,53 @@ class SensorNode:
 
         if self.metrics_file:
             self.metrics_file.close()
+
+    # MQTT methods (M2c)
+    def connect_mqtt(self, broker_host, broker_port=1883):
+        """
+        Connect to MQTT broker (M2c).
+
+        Args:
+            broker_host: MQTT broker hostname/IP
+            broker_port: MQTT broker port (default 1883)
+        """
+        try:
+            import paho.mqtt.client as mqtt
+        except ImportError:
+            raise ImportError("paho-mqtt not installed. Install with: pip install paho-mqtt")
+
+        # Create MQTT client
+        self.mqtt_client = mqtt.Client(client_id=f"sensor_{self.node_id}")
+
+        # Connect to broker
+        self.mqtt_client.connect(broker_host, broker_port, keepalive=60)
+
+        # Start background network loop
+        self.mqtt_client.loop_start()
+
+    def publish_reading(self, topic, data):
+        """
+        Publish sensor reading to MQTT broker (M2c).
+
+        Args:
+            topic: MQTT topic to publish to
+            data: Data dict to publish (will be JSON-encoded)
+        """
+        if self.mqtt_client is None:
+            raise RuntimeError("MQTT client not connected. Call connect_mqtt() first.")
+
+        # Convert data to JSON
+        payload = json.dumps(data)
+
+        # Publish to broker
+        self.mqtt_client.publish(topic, payload, qos=0)
+
+    def disconnect_mqtt(self):
+        """Disconnect from MQTT broker (M2c)."""
+        if self.mqtt_client:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect()
+            self.mqtt_client = None
 
 
 def main():

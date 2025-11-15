@@ -43,10 +43,35 @@ class GatewayNode:
     - Log all received data
     """
 
-    def __init__(self, port: int):
-        self.port = port
-        self.node_id = None
-        self.config = {}
+    def __init__(self, node_id_or_port, config=None, seed=None):
+        """
+        Initialize gateway node.
+
+        Supports two modes:
+        1. Server mode (M0): GatewayNode(port) - runs as standalone process
+        2. Direct mode (M2+): GatewayNode(node_id, config, seed) - Python object
+
+        Args:
+            node_id_or_port: Port (int) for server mode, or node_id (str) for direct mode
+            config: Configuration dict (direct mode only)
+            seed: Random seed (direct mode only)
+        """
+        # Detect mode based on first argument type
+        if isinstance(node_id_or_port, int):
+            # Server mode (M0)
+            self.port = node_id_or_port
+            self.node_id = None
+            self.config = {}
+            self.seed = None
+            self.direct_mode = False
+        else:
+            # Direct mode (M2+)
+            self.port = None
+            self.node_id = node_id_or_port
+            self.config = config or {}
+            self.seed = seed
+            self.direct_mode = True
+
         self.current_time_us = 0
         self.event_queue = []
 
@@ -59,8 +84,15 @@ class GatewayNode:
         self.metrics_file = None
         self.metrics_writer = None
 
+        # MQTT support (M2c)
+        self.mqtt_client = None
+        self.mqtt_messages = []  # Store received MQTT messages
+
     def start_server(self):
         """Start server and wait for coordinator."""
+        if self.direct_mode:
+            raise RuntimeError("Cannot start server in direct mode")
+
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind(('localhost', self.port))
@@ -219,6 +251,69 @@ class GatewayNode:
 
         if self.metrics_file:
             self.metrics_file.close()
+
+    # MQTT methods (M2c)
+    def connect_mqtt(self, broker_host, broker_port=1883, topics=None):
+        """
+        Connect to MQTT broker and subscribe to topics (M2c).
+
+        Args:
+            broker_host: MQTT broker hostname/IP
+            broker_port: MQTT broker port (default 1883)
+            topics: List of topics to subscribe to (default ['sensor/#'])
+        """
+        try:
+            import paho.mqtt.client as mqtt
+        except ImportError:
+            raise ImportError("paho-mqtt not installed. Install with: pip install paho-mqtt")
+
+        if topics is None:
+            topics = ['sensor/#']
+
+        # Create MQTT client
+        self.mqtt_client = mqtt.Client(client_id=f"gateway_{self.node_id}")
+
+        # Set message callback
+        self.mqtt_client.on_message = self._on_mqtt_message
+
+        # Connect to broker
+        self.mqtt_client.connect(broker_host, broker_port, keepalive=60)
+
+        # Subscribe to topics
+        for topic in topics:
+            self.mqtt_client.subscribe(topic, qos=0)
+
+        # Start background network loop
+        self.mqtt_client.loop_start()
+
+    def _on_mqtt_message(self, client, userdata, msg):
+        """
+        Callback for incoming MQTT messages (M2c).
+
+        Args:
+            client: MQTT client instance
+            userdata: User data (unused)
+            msg: MQTT message
+        """
+        try:
+            # Parse JSON payload
+            payload = json.loads(msg.payload.decode('utf-8'))
+
+            # Store message
+            self.mqtt_messages.append({
+                'topic': msg.topic,
+                'payload': payload
+            })
+
+        except json.JSONDecodeError as e:
+            print(f"[{self.node_id}] Invalid JSON in MQTT message: {e}")
+
+    def disconnect_mqtt(self):
+        """Disconnect from MQTT broker (M2c)."""
+        if self.mqtt_client:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect()
+            self.mqtt_client = None
 
 
 def main():
