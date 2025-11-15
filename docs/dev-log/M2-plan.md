@@ -134,7 +134,7 @@ Following wow.md Section 3, here are the initial 2-5 minor stages. This plan wil
 
 **Deferred**: MQTT integration, network latency simulation, metrics collection
 
-### M2c: MQTT Broker Container Integration
+### M2c: MQTT Broker Container Integration ⏳ TESTING
 
 **Objective**: Run a real MQTT broker (Eclipse Mosquitto) in Docker and integrate it with the simulation.
 
@@ -150,6 +150,16 @@ Following wow.md Section 3, here are the initial 2-5 minor stages. This plan wil
 - Python sensor nodes can publish MQTT messages to broker
 - Python gateway node can subscribe and receive messages
 - End-to-end MQTT message flow tested
+
+**Completed**: 2025-11-15 (commit 30a4806)
+- Mosquitto container: Dockerfile + mosquitto.conf
+- SensorNode MQTT methods: connect_mqtt(), publish_reading()
+- GatewayNode MQTT methods: connect_mqtt(), MQTT message handling
+- Dual-mode node architecture (M0 server + M2+ direct)
+- 6 integration tests: broker startup, pub/sub, end-to-end flow
+- Dependency: paho-mqtt>=1.6.1
+
+**Testing**: Delegated to testing agent (TASK-M2C-mqtt-tests.md)
 
 **Deferred**: ML inference integration, complex MQTT topologies
 
