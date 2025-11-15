@@ -271,6 +271,17 @@ class Coordinator:
         self.nodes[node_id] = InProcessNodeAdapter(node_id, node_instance)
         self.pending_events[node_id] = []
 
+    def add_adapter(self, node_id: str, adapter: NodeAdapter):
+        """
+        Register a custom node adapter (M3h: protocol-based containers).
+
+        Args:
+            node_id: Node identifier
+            adapter: Custom NodeAdapter instance (e.g., DockerProtocolAdapter)
+        """
+        self.nodes[node_id] = adapter
+        self.pending_events[node_id] = []
+
     def connect_all(self):
         """Connect to all registered nodes."""
         print("[Coordinator] Connecting to all nodes...")

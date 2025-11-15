@@ -66,6 +66,7 @@ class SimulationLauncher:
         self.scenario = scenario
         self.processes: List[subprocess.Popen] = []
         self.docker_containers: List[str] = []
+        self.docker_node_map: Dict[str, str] = {}  # node_id -> container_id mapping
         self.coordinator: Optional[Coordinator] = None
         self.start_wall_time = None
 
@@ -308,8 +309,25 @@ class SimulationLauncher:
             print(f"      Platform: {renode_config['platform']}")
             print(f"      Firmware: {renode_config['firmware']}")
 
+        elif implementation == 'docker':
+            # M3h: Protocol-based Docker nodes (stdin/stdout communication)
+            # Check if this node has a running container
+            if node_id not in self.docker_node_map:
+                raise RuntimeError(
+                    f"Node {node_id}: Docker container not started. "
+                    f"Ensure container is started before registering node."
+                )
+
+            from sim.harness.docker_protocol_adapter import DockerProtocolAdapter
+
+            container_id = self.docker_node_map[node_id]
+            adapter = DockerProtocolAdapter(node_id, container_id)
+            self.coordinator.add_adapter(node_id, adapter)
+
+            print(f"  - {node_id}: Docker (protocol, container {container_id[:12]})")
+
         else:
-            # Socket-based nodes (python_model, docker)
+            # Socket-based nodes (python_model)
             port = node.get('port')
             if not port:
                 raise ValueError(f"Node {node_id}: 'port' required for {implementation}")
@@ -414,6 +432,7 @@ class SimulationLauncher:
 
         container_id = result.stdout.decode().strip()
         self.docker_containers.append(container_id)
+        self.docker_node_map[node_id] = container_id  # Store node_id -> container_id mapping
         print(f"    Container started: {container_id[:12]}")
 
     def _stop_docker_container(self, container_id: str):
