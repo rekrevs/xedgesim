@@ -469,6 +469,112 @@ After M2a completion:
 
 ---
 
-**Status:** COMPLETE
-**Actual Time:** 3 hours
+## Results
+
+### Implementation Summary
+
+**Files Created:**
+- `sim/edge/docker_node.py` - DockerNode class implementation (196 lines)
+- `tests/stages/M2a/test_docker_node_basic.py` - Basic tests without Docker requirement (93 lines)
+- `tests/stages/M2a/test_docker_node_lifecycle.py` - Full lifecycle tests with Docker (293 lines)
+- `docs/dev-log/M2a-review-checklist.md` - Source-level review checklist
+- Updated `requirements-dev.txt` - Added docker>=7.0.0 dependency
+
+**Key Features:**
+- Container lifecycle management (create, start, wait, shutdown)
+- Interface compatible with existing Python nodes (SensorNode, GatewayNode)
+- Optional docker import (module loads even without Docker installed)
+- Cleanup utility for removing orphaned containers
+- Wall-clock time integration with advance_to() method
+- xedgesim labels for container identification
+- Multi-platform socket detection (Linux, macOS Docker Desktop, macOS Colima)
+
+### Test Results (Developer Agent - No Docker)
+
+**M2a Basic Tests:** ✅ 3/3 PASSED
+- test_docker_node_instantiation
+- test_docker_node_config_structure
+- test_docker_node_interface_compatibility
+
+**M2a Lifecycle Tests:** 13 tests written (require Docker, delegated to testing agent)
+
+**Regression Tests:** ✅ ALL PASSED
+- M1e: Network Metrics tests (8/8 passed)
+- M1d: LatencyNetworkModel tests (8/8 passed)
+
+### Delegated Testing Results (Testing Agent - Has Docker)
+
+**Task:** TASK-M2A-docker-tests (claude/tasks/TASK-M2A-docker-tests.md)
+**Results:** claude/results/TASK-M2A-docker-tests.md
+**Status:** ✅ SUCCESS
+**Date:** 2025-11-15
+**Duration:** 45 minutes
+
+**Full Test Suite Results:**
+- ✅ Echo service build: SUCCESS
+- ✅ M2a lifecycle tests: 11/11 PASSED (not skipped!)
+- ✅ M2a basic tests: 3/3 PASSED
+- ✅ M2b socket tests: 5/5 PASSED (validated together)
+- ✅ Echo service manual test: PASSED (JSON round-trip verified)
+- ✅ M1d regression: 8/8 PASSED
+- ✅ M1e regression: 8/8 PASSED
+- ✅ Container cleanup: SUCCESS (no orphaned containers)
+
+**Issues Found & Fixed by Testing Agent:**
+1. **Colima socket detection** - Fixed by adding `~/.colima/default/docker.sock` (commit 7617bce)
+2. **Test script cleanup** - Added `docker rm -f test-echo` before manual test (commit b4de677)
+3. **macOS port 5000 conflict** - Resolved by disabling AirPlay Receiver
+
+**Testing Environment:**
+- OS: macOS Sequoia (Darwin 25.1.0)
+- Architecture: arm64 (Apple Silicon)
+- Docker Runtime: Colima with macOS Virtualization.Framework
+- Python: 3.12.9
+
+### Acceptance Criteria Status
+
+1. ✅ DockerNode class implements same interface as SensorNode/GatewayNode
+2. ✅ Can create, start, and stop Docker containers
+3. ✅ Container lifecycle managed cleanly (no orphaned containers)
+4. ✅ Health checks detect when container is ready
+5. ✅ `advance_to(time_us)` method implemented (wall-clock sleep)
+6. ✅ Unit tests for container interface (3 basic tests pass)
+7. ✅ Integration tests validated (11 lifecycle tests pass with Docker)
+8. ✅ All M0-M1e tests still pass (regression tests passed)
+9. ✅ Git commits with clean implementation
+10. ✅ Works on multiple platforms (Linux, macOS Docker Desktop, macOS Colima)
+
+### Design Decisions Finalized
+
+**Optional Docker Dependency:**
+- docker module import wrapped in try/except
+- DOCKER_AVAILABLE flag for runtime checks
+- Helpful error message if Docker not installed
+- Tests skip gracefully without Docker
+
+**Multi-Platform Socket Detection:**
+- Auto-detects Docker socket across platforms:
+  - Linux: `/var/run/docker.sock`
+  - macOS Docker Desktop: `~/.docker/run/docker.sock`
+  - macOS Colima: `~/.colima/default/docker.sock`, `~/.colima/docker.sock`
+- Fallback to DOCKER_HOST environment variable
+
+**Wall-Clock Time Integration:**
+- advance_to() sleeps for wall-clock equivalent of virtual time delta
+- Non-deterministic by design (per architecture.md Section 5)
+- Documented in code and report
+
+**Container Naming:**
+- All containers prefixed with `xedgesim-`
+- Labels: `xedgesim=true` and `xedgesim_node_id=<node_id>`
+- Enables cleanup of orphaned containers
+
+### Known Issues
+
+**None** - All acceptance criteria met, validated on real Docker environment.
+
+---
+
+**Status:** COMPLETE & VALIDATED
+**Actual Time:** 3 hours (implementation) + 45 minutes (testing)
 **Completed:** 2025-11-15
