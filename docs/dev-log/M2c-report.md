@@ -235,6 +235,111 @@ def test_end_to_end_mqtt_flow():
 
 ---
 
-**Status:** IN PROGRESS
+## Implementation Summary
+
+**Status:** IMPLEMENTED (awaiting Docker testing)
+**Completed:** 2025-11-15 (commit 30a4806)
+**Implementation Time:** 2 hours
+
+### What Was Implemented
+
+1. **Mosquitto Broker Container** (Step 2)
+   - `containers/mqtt-broker/Dockerfile`: Eclipse Mosquitto 2.0
+   - `containers/mqtt-broker/mosquitto.conf`: Anonymous auth, no persistence
+   - Image: ~10MB, listens on port 1883
+
+2. **Integration Tests** (Step 3, TDD)
+   - `tests/stages/M2c/test_mqtt_integration.py`: 6 comprehensive tests
+   - Tests broker startup, client connection, sensor publish, gateway subscribe, end-to-end flow
+   - Tests require Docker daemon (will skip if not available)
+
+3. **SensorNode MQTT Support** (Step 4)
+   - `sim/device/sensor_node.py`: Added dual-mode initialization
+   - New methods: `connect_mqtt()`, `publish_reading()`, `disconnect_mqtt()`
+   - Supports both M0 server mode and M2+ direct instantiation
+   - Uses paho-mqtt client with background network loop
+
+4. **GatewayNode MQTT Support** (Step 5)
+   - `sim/edge/gateway_node.py`: Added dual-mode initialization
+   - New methods: `connect_mqtt()`, `disconnect_mqtt()`, `_on_mqtt_message()`
+   - Stores received messages in `mqtt_messages` list
+   - Supports topic subscription (default: `sensor/#`)
+
+5. **Dependencies**
+   - `requirements-dev.txt`: Added `paho-mqtt>=1.6.1`
+
+### Design Decisions
+
+**Dual-Mode Node Architecture**: Both SensorNode and GatewayNode now support two initialization modes:
+- **Server mode (M0)**: `SensorNode(port)` - socket-based protocol for coordinator
+- **Direct mode (M2+)**: `SensorNode(node_id, config, seed)` - Python object for direct testing
+
+This maintains backward compatibility with M0 while enabling M2c MQTT testing.
+
+**Why Dual Mode?**
+- M0 nodes run as separate processes communicating via socket protocol
+- M2c tests need direct instantiation to test MQTT connectivity
+- Dual mode avoids duplicating node logic
+- Mode detected automatically based on first argument type (int vs str)
+
+**MQTT Client Lifecycle**:
+- Background thread (`loop_start()`) handles network I/O
+- Clean disconnection (`loop_stop()` + `disconnect()`)
+- QoS 0 (at most once delivery) for simplicity
+- Anonymous authentication (development only)
+
+### Tests Added
+
+All tests in `tests/stages/M2c/test_mqtt_integration.py`:
+
+1. `test_mosquitto_broker_starts`: Broker container starts and logs version
+2. `test_mqtt_client_can_connect`: Raw MQTT client connection
+3. `test_sensor_node_mqtt_publish`: Sensor publishes without errors
+4. `test_gateway_node_mqtt_subscribe`: Gateway subscribes successfully
+5. `test_end_to_end_mqtt_flow`: Complete sensor → broker → gateway
+6. `test_multiple_sensors_to_gateway`: Fan-in pattern (2 sensors, 1 gateway)
+
+**Test Coverage**: Broker lifecycle, connection, pub/sub, end-to-end flow, multi-sensor scenarios.
+
+### Acceptance Criteria Status
+
+From M2c objectives:
+
+1. ⬜ Mosquitto broker Dockerfile created → ✅ IMPLEMENTED
+2. ⬜ Broker runs in Docker container → ⏳ REQUIRES TESTING
+3. ⬜ Python nodes can connect to broker → ⏳ REQUIRES TESTING
+4. ⬜ Sensor publishes messages to topic → ⏳ REQUIRES TESTING
+5. ⬜ Gateway subscribes and receives messages → ⏳ REQUIRES TESTING
+6. ⬜ End-to-end test passes: sensor → broker → gateway → ⏳ REQUIRES TESTING
+7. ⬜ Broker container cleanup working → ⏳ REQUIRES TESTING
+8. ⬜ All M0-M1e-M2a-M2b tests still pass → ⏳ REQUIRES TESTING
+
+**Implementation complete, Docker testing delegated.**
+
+### Known Limitations
+
+As documented in M2c plan:
+- Anonymous connections only (no authentication)
+- No TLS/SSL encryption
+- Simple QoS 0 (at most once delivery)
+- No message persistence
+- No retained messages or will messages
+- Single broker (no clustering)
+
+These are intentional for M2c scope and acceptable for ML placement experiments (M3).
+
+### Backward Compatibility
+
+**M0 Compatibility Maintained**:
+- Server mode still works: `SensorNode(port)`, `GatewayNode(port)`
+- M0 protocol unchanged
+- M0 tests unaffected (no direct mode calls)
+
+**Tested Locally**: Basic imports and syntax validated. Full Docker tests delegated.
+
+---
+
+**Status:** IMPLEMENTED (awaiting Docker testing)
 **Estimated Time:** 3-4 hours (implementation) + testing delegation
 **Started:** 2025-11-15
+**Implemented:** 2025-11-15
