@@ -46,6 +46,8 @@ echo ""
 
 # Manual echo service test
 echo "6. Testing echo service manually..."
+echo "   Cleaning up any existing test-echo container..."
+docker rm -f test-echo > /dev/null 2>&1 || true
 echo "   Starting echo container..."
 docker run -d --name test-echo -p 5000:5000 xedgesim/echo:latest
 sleep 2
