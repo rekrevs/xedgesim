@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
+from abc import ABC, abstractmethod
 
 # Add project root to path for imports (M1b: needed for sim.config)
 _project_root = Path(__file__).parent.parent.parent
@@ -44,11 +45,48 @@ class Event:
     size_bytes: int = 0
 
 
-class NodeConnection:
-    """Represents a connection to a simulated node."""
+class NodeAdapter(ABC):
+    """
+    Abstract base class for node adapters (M3fc).
+
+    Supports both socket-based nodes (python_model, docker) and
+    in-process nodes (renode_inprocess).
+    """
+
+    def __init__(self, node_id: str):
+        self.node_id = node_id
+
+    @abstractmethod
+    def connect(self):
+        """Connect/initialize the node."""
+        pass
+
+    @abstractmethod
+    def send_init(self, config: Dict[str, Any]):
+        """Send initialization configuration to node."""
+        pass
+
+    @abstractmethod
+    def send_advance(self, target_time_us: int, pending_events: List[Event]):
+        """Advance node to target time with pending events."""
+        pass
+
+    @abstractmethod
+    def wait_done(self) -> List[Event]:
+        """Wait for node to finish advancing and return events."""
+        pass
+
+    @abstractmethod
+    def send_shutdown(self):
+        """Shutdown the node."""
+        pass
+
+
+class NodeConnection(NodeAdapter):
+    """Represents a socket-based connection to a simulated node (python_model, docker)."""
 
     def __init__(self, node_id: str, host: str, port: int):
-        self.node_id = node_id
+        super().__init__(node_id)
         self.host = host
         self.port = port
         self.sock = None
@@ -112,6 +150,80 @@ class NodeConnection:
         self.sock.close()
 
 
+class InProcessNodeAdapter(NodeAdapter):
+    """
+    Adapter for in-process nodes (M3fc: renode_inprocess).
+
+    Wraps nodes that are instantiated directly by the coordinator
+    (e.g., RenodeNode) to provide the same interface as socket-based nodes.
+    """
+
+    def __init__(self, node_id: str, node_instance):
+        """
+        Initialize in-process node adapter.
+
+        Args:
+            node_id: Node identifier
+            node_instance: Instance of node class (e.g., RenodeNode)
+                          Must implement: start(), advance(time_us), stop()
+        """
+        super().__init__(node_id)
+        self.node = node_instance
+        self.current_time_us = 0
+
+    def connect(self):
+        """Start the in-process node."""
+        print(f"[Coordinator] Starting in-process node: {self.node_id}")
+        self.node.start()
+
+    def send_init(self, config: Dict[str, Any]):
+        """
+        Initialize the node with configuration.
+
+        For in-process nodes, initialization happens in constructor,
+        so this is a no-op. Just log that we're ready.
+        """
+        print(f"[Coordinator] {self.node_id} initialized and ready (in-process)")
+
+    def send_advance(self, target_time_us: int, pending_events: List[Event]):
+        """
+        Advance the in-process node to target time.
+
+        Note: pending_events are currently ignored for in-process nodes.
+        M3fc focuses on device-tier emulation which doesn't receive events
+        from other nodes. Future stages can extend this.
+        """
+        self.current_time_us = target_time_us
+        # Note: pending_events handling can be added if needed in future
+
+    def wait_done(self) -> List[Event]:
+        """
+        Advance node and collect events.
+
+        For in-process nodes, advance() is synchronous (blocks until complete).
+        """
+        events = self.node.advance(self.current_time_us)
+
+        # Convert node-specific events to coordinator Event format
+        coordinator_events = []
+        for event in events:
+            coordinator_events.append(Event(
+                time_us=event.time,
+                type=event.type,
+                src=self.node_id,
+                dst=None,  # Device events broadcast to network
+                payload={'value': event.value} if hasattr(event, 'value') else None,
+                size_bytes=64  # Assume small JSON payload
+            ))
+
+        return coordinator_events
+
+    def send_shutdown(self):
+        """Shutdown the in-process node."""
+        print(f"[Coordinator] Shutting down in-process node: {self.node_id}")
+        self.node.stop()
+
+
 class Coordinator:
     """
     Minimal M0 Coordinator.
@@ -134,7 +246,7 @@ class Coordinator:
         """
         self.time_quantum_us = time_quantum_us
         self.current_time_us = 0
-        self.nodes: Dict[str, NodeConnection] = {}
+        self.nodes: Dict[str, NodeAdapter] = {}  # M3fc: Support both socket and in-process nodes
         self.pending_events: Dict[str, List[Event]] = {}  # node_id -> events
 
         # M1c: Network model for message routing
@@ -144,8 +256,19 @@ class Coordinator:
         self.network_model = network_model
 
     def add_node(self, node_id: str, host: str, port: int):
-        """Register a node."""
+        """Register a socket-based node (python_model, docker)."""
         self.nodes[node_id] = NodeConnection(node_id, host, port)
+        self.pending_events[node_id] = []
+
+    def add_inprocess_node(self, node_id: str, node_instance):
+        """
+        Register an in-process node (M3fc: renode_inprocess).
+
+        Args:
+            node_id: Node identifier
+            node_instance: Instance of node class (e.g., RenodeNode)
+        """
+        self.nodes[node_id] = InProcessNodeAdapter(node_id, node_instance)
         self.pending_events[node_id] = []
 
     def connect_all(self):
@@ -278,9 +401,41 @@ def main():
             network_model=network_model
         )
 
-        # Register nodes from scenario
+        # Register nodes from scenario (M3fc: support both socket and in-process nodes)
         for node in scenario.nodes:
-            coordinator.add_node(node['id'], "localhost", node['port'])
+            implementation = node.get('implementation', 'python_model')
+
+            if implementation == 'renode_inprocess':
+                # M3fc: Create in-process RenodeNode
+                from sim.device.renode_node import RenodeNode
+
+                # Extract Renode configuration from node
+                renode_config = {
+                    'platform': node.get('platform'),
+                    'firmware': node.get('firmware'),
+                    'monitor_port': node.get('monitor_port', None),  # Auto-assign if not specified
+                    'working_dir': node.get('working_dir', f'/tmp/xedgesim/{node["id"]}'),
+                }
+
+                # Validate required fields
+                if not renode_config['platform']:
+                    raise ValueError(f"Node {node['id']}: 'platform' required for renode_inprocess")
+                if not renode_config['firmware']:
+                    raise ValueError(f"Node {node['id']}: 'firmware' required for renode_inprocess")
+
+                # Create RenodeNode instance
+                renode_node = RenodeNode(node['id'], renode_config)
+                coordinator.add_inprocess_node(node['id'], renode_node)
+
+                print(f"[Coordinator] Registered in-process Renode node: {node['id']}")
+                print(f"  Platform: {renode_config['platform']}")
+                print(f"  Firmware: {renode_config['firmware']}")
+
+            else:
+                # Socket-based nodes (python_model, docker)
+                if 'port' not in node:
+                    raise ValueError(f"Node {node['id']}: 'port' required for {implementation}")
+                coordinator.add_node(node['id'], "localhost", node['port'])
 
         # Connect and initialize
         coordinator.connect_all()

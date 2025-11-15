@@ -241,16 +241,18 @@ def load_scenario(yaml_path: str) -> Scenario:
             raise ValueError(f"Node {i}: Missing required field 'id'")
         if 'type' not in node:
             raise ValueError(f"Node {i}: Missing required field 'type'")
-        if 'port' not in node:
-            raise ValueError(f"Node {i} (id={node.get('id')}): Missing required field 'port'")
 
-        # M2d: Parse implementation field (default to python_model)
+        # M2d/M3fc: Parse implementation field (default to python_model)
         implementation = node.get('implementation', 'python_model')
-        if implementation not in ['python_model', 'docker']:
+        if implementation not in ['python_model', 'docker', 'renode_inprocess']:  # M3fc
             raise ValueError(
                 f"Node {i} (id={node.get('id')}): "
-                f"implementation must be 'python_model' or 'docker', got '{implementation}'"
+                f"implementation must be 'python_model', 'docker', or 'renode_inprocess', got '{implementation}'"
             )
+
+        # Port is required for socket-based nodes, but not for in-process nodes (M3fc)
+        if implementation in ['python_model', 'docker'] and 'port' not in node:
+            raise ValueError(f"Node {i} (id={node.get('id')}): Missing required field 'port' for {implementation}")
 
         # M2d: Parse Docker-specific configuration
         docker_config = None
@@ -264,13 +266,33 @@ def load_scenario(yaml_path: str) -> Scenario:
                     )
                 docker_config = docker  # Pass through as-is for now
 
-        validated_nodes.append({
+        # Build validated node config (M3fc: port optional for renode_inprocess)
+        validated_node = {
             'id': node['id'],
             'type': node['type'],
-            'port': int(node['port']),
-            'implementation': implementation,  # M2d
-            'docker': docker_config  # M2d
-        })
+            'implementation': implementation,
+        }
+
+        if 'port' in node:
+            validated_node['port'] = int(node['port'])
+
+        if docker_config:
+            validated_node['docker'] = docker_config
+
+        # M3fc: Pass through Renode-specific fields
+        if implementation == 'renode_inprocess':
+            if 'platform' in node:
+                validated_node['platform'] = node['platform']
+            if 'firmware' in node:
+                validated_node['firmware'] = node['firmware']
+            if 'monitor_port' in node:
+                validated_node['monitor_port'] = int(node['monitor_port'])
+            if 'working_dir' in node:
+                validated_node['working_dir'] = node['working_dir']
+            if 'seed' in node:
+                validated_node['seed'] = int(node['seed'])
+
+        validated_nodes.append(validated_node)
 
     # Parse network configuration (M1d - optional)
     network_config = None
