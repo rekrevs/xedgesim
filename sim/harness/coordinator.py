@@ -43,6 +43,12 @@ class Event:
     dst: str = None
     payload: Any = None
     size_bytes: int = 0
+    network_metadata: dict = None  # M3i: Latency, loss, routing info
+
+    def __post_init__(self):
+        """Initialize mutable defaults."""
+        if self.network_metadata is None:
+            self.network_metadata = {}
 
 
 class NodeAdapter(ABC):
