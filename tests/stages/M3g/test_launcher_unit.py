@@ -187,22 +187,11 @@ class TestNetworkModelCreation:
         assert isinstance(network_model, DirectNetworkModel)
 
     def test_invalid_network_model_raises(self):
-        """Test launcher raises error for invalid network model type."""
-        scenario = Scenario(
-            duration_s=1.0,
-            seed=42,
-            time_quantum_us=1000,
-            nodes=[
-                {'id': 'sensor1', 'type': 'sensor', 'implementation': 'python_model', 'port': 5001}
-            ],
-            network=NetworkConfig(model="invalid_model")
-        )
-
-        launcher = SimulationLauncher(scenario)
-
-        # Validation should have caught this
-        with pytest.raises(ValueError):
-            network_model = launcher._create_network_model()
+        """Test NetworkConfig raises error for invalid network model type."""
+        # NetworkConfig validation happens in __post_init__, so the error
+        # is raised during construction, not later
+        with pytest.raises(ValueError, match="network.model must be"):
+            NetworkConfig(model="invalid_model")
 
 
 class TestLauncherInitialization:

@@ -321,14 +321,15 @@ class SimulationLauncher:
         """
         Start a Docker container for a node.
 
-        Note: This is a stub for M3g. Full Docker integration
-        requires Docker daemon and will be tested by testing agent.
+        Args:
+            node: Node configuration with docker settings
+
+        Raises:
+            RuntimeError: If Docker is not available
+            ValueError: If required docker config is missing
         """
         node_id = node['id']
         docker_config = node.get('docker', {})
-
-        # M3g: Basic Docker container startup
-        # Full implementation will be tested by testing agent with Docker
 
         print(f"  - {node_id}: Docker container")
 
@@ -345,35 +346,99 @@ class SimulationLauncher:
             print(f"    Full Docker tests will be run by testing agent.")
             return
 
-        # Docker is available - try to start container
-        # (This code will be fully tested by testing agent)
+        # Get image name
         image = docker_config.get('image')
         if not image:
             raise ValueError(f"Node {node_id}: Docker node requires 'image' in docker config")
 
         # Build if build_context specified
         if 'build_context' in docker_config:
-            print(f"    Building image from: {docker_config['build_context']}")
-            # docker build implementation here (delegated to testing agent)
+            build_context = docker_config['build_context']
+            print(f"    Building image from: {build_context}")
+
+            build_cmd = ['docker', 'build', '-t', image]
+
+            # Add Dockerfile path if specified
+            if 'dockerfile' in docker_config:
+                build_cmd.extend(['-f', docker_config['dockerfile']])
+
+            build_cmd.append(build_context)
+
+            result = subprocess.run(build_cmd,
+                                  capture_output=True,
+                                  timeout=300)  # 5 min timeout for build
+            if result.returncode != 0:
+                raise RuntimeError(f"Docker build failed: {result.stderr.decode()}")
+
+        # Prepare docker run command
+        run_cmd = ['docker', 'run', '-d', '--name', f'xedgesim-{node_id}']
+
+        # Add port mappings
+        ports = docker_config.get('ports', [])
+        for port_mapping in ports:
+            run_cmd.extend(['-p', port_mapping])
+
+        # Add environment variables
+        env_vars = docker_config.get('environment', {})
+        for key, value in env_vars.items():
+            run_cmd.extend(['-e', f'{key}={value}'])
+
+        # Add volumes
+        volumes = docker_config.get('volumes', [])
+        for volume in volumes:
+            run_cmd.extend(['-v', volume])
+
+        # Add network
+        if 'network' in docker_config:
+            run_cmd.extend(['--network', docker_config['network']])
+
+        # Add image
+        run_cmd.append(image)
+
+        # Add command if specified
+        if 'command' in docker_config:
+            cmd = docker_config['command']
+            if isinstance(cmd, list):
+                run_cmd.extend(cmd)
+            else:
+                run_cmd.append(cmd)
 
         # Run container
         print(f"    Starting container: {image}")
-        # docker run implementation here (delegated to testing agent)
+        result = subprocess.run(run_cmd,
+                              capture_output=True,
+                              timeout=30)
 
-        # Store container ID for cleanup
-        # self.docker_containers.append(container_id)
+        if result.returncode != 0:
+            raise RuntimeError(f"Docker run failed: {result.stderr.decode()}")
+
+        container_id = result.stdout.decode().strip()
+        self.docker_containers.append(container_id)
+        print(f"    Container started: {container_id[:12]}")
 
     def _stop_docker_container(self, container_id: str):
         """
-        Stop a Docker container.
+        Stop and remove a Docker container.
 
-        Note: This is a stub for M3g. Full Docker integration
-        will be tested by testing agent.
+        Args:
+            container_id: Docker container ID to stop
         """
         try:
-            subprocess.run(['docker', 'stop', container_id],
-                         capture_output=True,
-                         timeout=10)
+            # Stop the container
+            print(f"  - Stopping container {container_id[:12]}...")
+            result = subprocess.run(['docker', 'stop', container_id],
+                                  capture_output=True,
+                                  timeout=10)
+            if result.returncode != 0:
+                print(f"    WARNING: Failed to stop: {result.stderr.decode()}")
+
+            # Remove the container
+            result = subprocess.run(['docker', 'rm', container_id],
+                                  capture_output=True,
+                                  timeout=5)
+            if result.returncode != 0:
+                print(f"    WARNING: Failed to remove: {result.stderr.decode()}")
+
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
             print(f"    WARNING: Failed to stop container {container_id}: {e}")
 
