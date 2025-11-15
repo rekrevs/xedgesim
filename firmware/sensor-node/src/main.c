@@ -31,7 +31,18 @@ static uint64_t current_time_us = 0;
 
 /* RNG state */
 static uint32_t rng_seed = RNG_SEED_DEFAULT;
+static uint32_t rng_state = RNG_SEED_DEFAULT;
 static bool rng_initialized = false;
+
+/**
+ * Simple LCG PRNG for deterministic sensor values
+ * Uses constants from Numerical Recipes
+ */
+static uint32_t prng_next(void)
+{
+	rng_state = rng_state * 1664525 + 1013904223;
+	return rng_state;
+}
 
 /**
  * Initialize the RNG with seed from device tree
@@ -44,8 +55,11 @@ static void init_rng(void)
 
 	/* In production, seed would come from device tree
 	 * For now, use hardcoded default
+	 *
+	 * Note: sys_rand_seed_set() was removed in Zephyr 4.x
+	 * The random subsystem is now hardware-based or uses CSPRNGs
+	 * For deterministic testing, we'll use a simpler PRNG
 	 */
-	sys_rand_seed_set(rng_seed);
 	rng_initialized = true;
 
 	printk("xEdgeSim: RNG initialized with seed %u\n", rng_seed);
@@ -58,7 +72,7 @@ static void init_rng(void)
  */
 static float generate_sensor_sample(void)
 {
-	uint32_t raw = sys_rand32_get();
+	uint32_t raw = prng_next();
 
 	/* Map random value to sensor range */
 	float range = SENSOR_MAX_VALUE - SENSOR_MIN_VALUE;

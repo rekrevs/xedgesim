@@ -54,6 +54,14 @@ echo
 # Create temp file for Renode script
 RENODE_SCRIPT=$(mktemp /tmp/renode_test_XXXXXX.resc)
 
+# Convert duration to HH:MM:SS format for Renode
+# Renode's RunFor command expects "HH:MM:SS" format
+HOURS=$(echo "$DURATION / 3600" | bc)
+REMAINDER=$(echo "$DURATION % 3600" | bc)
+MINUTES=$(echo "$REMAINDER / 60" | bc)
+SECONDS=$(echo "$REMAINDER % 60" | bc)
+TIME_FORMAT=$(printf "%02d:%02d:%02d" $HOURS $MINUTES $SECONDS)
+
 cat > "$RENODE_SCRIPT" <<EOF
 # M3fb Test Script - Auto-generated
 # Tests sensor firmware in standalone Renode
@@ -73,12 +81,9 @@ showAnalyzer sysbus.uart0
 # Configure emulation timing
 emulation SetGlobalQuantum "0.0001"
 
-# Start emulation
-start
-
-# Run for specified duration
-echo "Running emulation for $DURATION seconds..."
-emulation RunFor @$DURATION
+# Run for specified duration (starts and runs emulation)
+echo "Running emulation for $DURATION seconds (virtual time: $TIME_FORMAT)..."
+emulation RunFor "$TIME_FORMAT"
 
 # Show results
 echo ""
@@ -98,8 +103,8 @@ echo "Starting Renode..."
 echo "=========================="
 echo
 
-# Run Renode with script
-renode --disable-xwt "$RENODE_SCRIPT"
+# Run Renode with script (console mode, no GUI)
+renode --console --disable-xwt "$RENODE_SCRIPT"
 
 # Cleanup
 rm -f "$RENODE_SCRIPT"
