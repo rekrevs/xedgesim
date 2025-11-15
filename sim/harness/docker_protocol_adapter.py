@@ -62,6 +62,7 @@ class DockerProtocolAdapter(NodeAdapter):
         self.container_id = container_id
         self.process: Optional[subprocess.Popen] = None
         self.connected = False
+        self.initialized = False  # Tracks whether send_init() has been called
         self.stdout_queue: queue.Queue = queue.Queue()
         self.stderr_queue: queue.Queue = queue.Queue()
         self.stdout_thread: Optional[threading.Thread] = None
@@ -164,6 +165,8 @@ class DockerProtocolAdapter(NodeAdapter):
                 f"Container stderr: {stderr_output}"
             )
 
+        # Mark as initialized after successful INIT
+        self.initialized = True
         print(f"[DockerProtocolAdapter] {self.node_id} initialized (READY)")
 
     def send_advance(self, target_time_us: int, pending_events: List[Event]):
@@ -180,6 +183,11 @@ class DockerProtocolAdapter(NodeAdapter):
         """
         if not self.connected:
             raise RuntimeError(f"Not connected to container {self.container_id}")
+
+        if not self.initialized:
+            raise RuntimeError(
+                f"Must call send_init() before send_advance() for node {self.node_id}"
+            )
 
         # Send ADVANCE with target time
         advance_cmd = f"ADVANCE {target_time_us}"
