@@ -1,5 +1,5 @@
 """
-latency_model.py - M1d Latency Network Model
+latency_model.py - M1d Latency Network Model (extended in M1e)
 
 Implements a deterministic network model with configurable latency and packet loss.
 
@@ -8,6 +8,7 @@ DESIGN PHILOSOPHY:
 - Configurable: per-link latency and loss rates
 - Simple: just latency and loss, no bandwidth/reordering yet
 - Event queue maintains in-flight packets
+- M1e: Tracks network metrics for performance analysis
 """
 
 import heapq
@@ -15,6 +16,7 @@ import random
 import hashlib
 from typing import List, Dict, TYPE_CHECKING
 from sim.network.network_model import NetworkModel
+from sim.network.metrics import NetworkMetrics
 
 # Avoid circular import
 if TYPE_CHECKING:
@@ -85,6 +87,9 @@ class LatencyNetworkModel(NetworkModel):
         # Track current simulation time (for advance_to logic)
         self.current_time_us = 0
 
+        # M1e: Network metrics tracking
+        self.metrics = NetworkMetrics()
+
     def route_message(self, event: 'Event') -> List['Event']:
         """
         Route message with latency and possible packet loss.
@@ -96,6 +101,9 @@ class LatencyNetworkModel(NetworkModel):
             Empty list (event is queued for delayed delivery)
             or empty list if packet is dropped
         """
+        # M1e: Record packet sent
+        self.metrics.record_sent()
+
         # Look up link configuration
         link_key = (event.src, event.dst) if event.dst else (event.src, None)
 
@@ -110,7 +118,8 @@ class LatencyNetworkModel(NetworkModel):
 
         # Determine if packet is dropped (deterministic)
         if rng.random() < loss_rate:
-            # Packet dropped
+            # M1e: Record packet dropped
+            self.metrics.record_dropped()
             return []
 
         # Calculate delivery time
@@ -126,6 +135,10 @@ class LatencyNetworkModel(NetworkModel):
             payload=event.payload,
             size_bytes=event.size_bytes
         )
+
+        # Store latency with event for metrics tracking
+        # We'll record delivery when the event is actually delivered in advance_to()
+        delayed_event._latency_us = latency_us  # Store for metrics
 
         # Add to priority queue
         heapq.heappush(self.event_queue, (delivery_time_us, delayed_event))
@@ -156,6 +169,10 @@ class LatencyNetworkModel(NetworkModel):
                 # Event is ready - pop it
                 heapq.heappop(self.event_queue)
                 ready_events.append(event)
+
+                # M1e: Record delivery with latency
+                latency_us = getattr(event, '_latency_us', 0)
+                self.metrics.record_delivered(latency_us)
             else:
                 # Next event is in the future
                 break
@@ -163,9 +180,12 @@ class LatencyNetworkModel(NetworkModel):
         return ready_events
 
     def reset(self):
-        """Reset network state (clear event queue)."""
+        """Reset network state (clear event queue and metrics)."""
         self.event_queue = []
         self.current_time_us = 0
+
+        # M1e: Reset metrics
+        self.metrics.reset()
 
         # Re-initialize RNGs to original seed state
         for link in self.config.links:
@@ -180,3 +200,12 @@ class LatencyNetworkModel(NetworkModel):
         hash_digest = hashlib.sha256(hash_input).digest()
         default_seed = int.from_bytes(hash_digest[:8], 'big')
         self.default_rng = random.Random(default_seed)
+
+    def get_metrics(self) -> NetworkMetrics:
+        """
+        Get current network metrics (M1e).
+
+        Returns:
+            NetworkMetrics with current performance statistics
+        """
+        return self.metrics

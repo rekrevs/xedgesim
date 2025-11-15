@@ -1,5 +1,5 @@
 """
-network_model.py - M1c Network Abstraction
+network_model.py - M1c Network Abstraction (extended in M1e)
 
 Defines the NetworkModel abstract base class for network simulation.
 
@@ -7,6 +7,7 @@ DESIGN PHILOSOPHY:
 - Abstract interface for pluggable network models
 - Enables progression from zero-latency (M1c) to realistic ns-3 (M1f)
 - Simple, extensible interface
+- M1e: Added metrics collection for performance analysis
 """
 
 from abc import ABC, abstractmethod
@@ -15,6 +16,7 @@ from typing import List, TYPE_CHECKING
 # Avoid circular import
 if TYPE_CHECKING:
     from sim.harness.coordinator import Event
+    from sim.network.metrics import NetworkMetrics
 
 
 class NetworkModel(ABC):
@@ -88,5 +90,24 @@ class NetworkModel(ABC):
         Called between test runs to ensure clean state.
         Stateless models (DirectNetworkModel) can leave this as no-op.
         Stateful models should clear any pending events and reset counters.
+        """
+        pass
+
+    @abstractmethod
+    def get_metrics(self) -> 'NetworkMetrics':
+        """
+        Get current network performance metrics (M1e).
+
+        Returns:
+            NetworkMetrics object with current statistics:
+            - packets_sent: Total packets sent through network
+            - packets_delivered: Total packets successfully delivered
+            - packets_dropped: Total packets dropped (due to loss)
+            - Latency statistics (min, max, average)
+
+        Notes:
+            - For stateless models (DirectNetworkModel): all zero
+            - For stateful models (LatencyNetworkModel): actual counts
+            - Metrics are cumulative since last reset()
         """
         pass

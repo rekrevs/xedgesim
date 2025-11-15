@@ -1,5 +1,5 @@
 """
-direct_model.py - M1c DirectNetworkModel
+direct_model.py - M1c DirectNetworkModel (extended in M1e)
 
 Zero-latency direct routing implementation.
 Behaves identically to M0 inline routing logic in coordinator.
@@ -10,10 +10,12 @@ DESIGN PHILOSOPHY:
 - Stateless (no buffering, no pending events)
 - Used to validate network abstraction layer works
 - Maintains M0 determinism
+- M1e: Returns empty metrics (stateless model)
 """
 
 from typing import List, TYPE_CHECKING
 from sim.network.network_model import NetworkModel
+from sim.network.metrics import NetworkMetrics
 
 # Avoid circular import
 if TYPE_CHECKING:
@@ -73,3 +75,13 @@ class DirectNetworkModel(NetworkModel):
         """
         # No state to reset
         pass
+
+    def get_metrics(self) -> NetworkMetrics:
+        """
+        Get network metrics (M1e).
+
+        Returns:
+            Empty NetworkMetrics (DirectNetworkModel is stateless, doesn't track metrics)
+        """
+        # Direct model doesn't track metrics (stateless)
+        return NetworkMetrics()
