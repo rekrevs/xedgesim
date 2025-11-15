@@ -1,0 +1,23 @@
+# M2d Example: Python Model Gateway
+# This scenario uses a Python model for the gateway (deterministic)
+
+simulation:
+  duration_s: 10
+  seed: 42
+  time_quantum_us: 1000
+
+network:
+  model: latency
+  default_latency_us: 10000
+  default_loss_rate: 0.0
+
+nodes:
+  - id: sensor1
+    type: sensor
+    implementation: python_model
+    port: 5001
+
+  - id: gateway1
+    type: gateway
+    implementation: python_model  # Python model (deterministic)
+    port: 5002

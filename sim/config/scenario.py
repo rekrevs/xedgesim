@@ -1,5 +1,5 @@
 """
-scenario.py - YAML Scenario Parser (M1b, extended in M1d)
+scenario.py - YAML Scenario Parser (M1b, extended in M1d, M2d)
 
 Parses simulation scenarios from YAML configuration files.
 
@@ -26,8 +26,18 @@ Example YAML:
 
     nodes:
       - id: sensor1
-        type: sensor_model
+        type: sensor
+        implementation: python_model  # M2d: "python_model" or "docker"
         port: 5001
+
+      - id: gateway1
+        type: gateway
+        implementation: docker  # M2d: Docker container
+        docker:  # M2d: Docker-specific config
+          image: xedgesim/gateway:latest
+          build_context: containers/gateway
+          ports:
+            5000: 5000
 """
 
 import yaml
@@ -183,10 +193,32 @@ def load_scenario(yaml_path: str) -> Scenario:
         if 'port' not in node:
             raise ValueError(f"Node {i} (id={node.get('id')}): Missing required field 'port'")
 
+        # M2d: Parse implementation field (default to python_model)
+        implementation = node.get('implementation', 'python_model')
+        if implementation not in ['python_model', 'docker']:
+            raise ValueError(
+                f"Node {i} (id={node.get('id')}): "
+                f"implementation must be 'python_model' or 'docker', got '{implementation}'"
+            )
+
+        # M2d: Parse Docker-specific configuration
+        docker_config = None
+        if implementation == 'docker':
+            if 'docker' in node:
+                docker = node['docker']
+                if not isinstance(docker, dict):
+                    raise ValueError(
+                        f"Node {i} (id={node.get('id')}): "
+                        f"'docker' section must be a dict"
+                    )
+                docker_config = docker  # Pass through as-is for now
+
         validated_nodes.append({
             'id': node['id'],
             'type': node['type'],
-            'port': int(node['port'])
+            'port': int(node['port']),
+            'implementation': implementation,  # M2d
+            'docker': docker_config  # M2d
         })
 
     # Parse network configuration (M1d - optional)
