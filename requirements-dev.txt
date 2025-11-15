@@ -3,9 +3,13 @@
 # Testing
 pytest>=7.0.0
 pytest-cov>=4.0.0
+pytest-timeout>=2.1.0
 
 # Configuration (M1b)
 pyyaml>=6.0
+
+# Docker integration (M2a)
+docker>=7.0.0
 
 # Future dependencies (commented out for now)
 # pandas>=2.0  # M3+: Analysis
