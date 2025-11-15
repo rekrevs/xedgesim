@@ -64,7 +64,11 @@ Pull and continue
 1. **Pull results:** `git pull`
 2. **Read results:** `cat claude/results/TASK-NAME.md`
 3. **Review status:** ✅ SUCCESS / ❌ FAILED / ⚠️ PARTIAL
-4. **Continue work** based on results
+4. **Update stage report:** Integrate testing results into `docs/dev-log/Mxy-report.md`
+   - Add "Delegated Testing Results" section
+   - Document issues found and fixes applied
+   - Reference both task and results files
+5. **Continue work** based on results
 
 ## Task File Format
 
@@ -93,6 +97,24 @@ Required sections:
 
 - **Parallel work:** Developer continues planning while tests run
 - **Clear handoff:** Explicit task files, no ambiguity
-- **Documentation:** Results are automatically documented
+- **Documentation:** Results documented in both claude/results/ and dev-log/
 - **Git-based:** Uses existing VCS, no special tools
 - **Debugging:** Testing agent fixes issues immediately
+
+## Documentation Requirements
+
+Per wow.md, all stage reports must be comprehensive. For delegated testing:
+
+1. **Testing agent** documents in `claude/results/TASK-NAME.md`:
+   - Full test output
+   - Issues found
+   - Fixes applied
+   - Commits made
+
+2. **Developer agent** integrates into `docs/dev-log/Mxy-report.md`:
+   - Add "Delegated Testing Results" section
+   - Summarize what was tested and outcomes
+   - Reference task and results files
+   - Document any issues or fixes
+
+This ensures stage reports follow wow.md standards and remain comprehensive.
