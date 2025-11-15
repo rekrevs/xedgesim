@@ -11,6 +11,10 @@ For real research, use actual trained models.
 """
 
 import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     import torch
@@ -20,21 +24,7 @@ except ImportError:
     print("Error: PyTorch not installed. Install with: pip install torch")
     sys.exit(1)
 
-
-class SimpleAnomalyDetector(nn.Module):
-    """Simple 2-layer neural network for binary anomaly detection."""
-
-    def __init__(self, input_dim=32, hidden_dim=16):
-        super().__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
-        x = self.sigmoid(x)
-        return x
+from models.simple_anomaly_detector import SimpleAnomalyDetector
 
 
 def create_onnx_model(output_path="models/anomaly_detector.onnx", input_dim=32):
@@ -127,8 +117,8 @@ def create_pytorch_model(output_path="models/anomaly_detector.pt", input_dim=32)
     # Test the model with PyTorch
     print("\nValidating PyTorch model...")
 
-    # Load model
-    loaded_model = torch.load(output_path)
+    # Load model (weights_only=False needed for full model loading)
+    loaded_model = torch.load(output_path, weights_only=False)
     loaded_model.eval()
 
     # Test inference
