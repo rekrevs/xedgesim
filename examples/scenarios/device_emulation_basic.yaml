@@ -1,0 +1,49 @@
+# xEdgeSim Scenario: Basic Device Emulation with Renode
+#
+# Demonstrates M3f device-tier emulation using real ARM firmware in Renode.
+#
+# Topology:
+#   sensor_device (Renode/nRF52840) --> gateway --> cloud
+#
+# The sensor runs actual Zephyr firmware, outputting JSON sensor samples
+# over UART. RenodeNode adapter bridges Renode to the simulation.
+
+simulation:
+  duration_s: 10.0
+  seed: 42
+  time_quantum_us: 1000000  # 1 second (matches firmware sample interval)
+
+network:
+  model: latency
+  default_latency_us: 10000  # 10ms default
+  default_loss_rate: 0.0
+  links:
+    - src: sensor_device
+      dst: gateway
+      latency_us: 5000  # 5ms sensor->gateway
+    - src: gateway
+      dst: cloud
+      latency_us: 50000  # 50ms gateway->cloud
+
+nodes:
+  # Device-tier node: ARM firmware in Renode
+  - id: sensor_device
+    type: renode
+    implementation: renode_inprocess  # In-process RenodeNode
+    platform: platforms/nrf52840.repl  # Renode platform description
+    firmware: firmware/sensor-node/build/zephyr/zephyr.elf
+    monitor_port: 9999
+    working_dir: /tmp/xedgesim/sensor_device
+    seed: 42  # Firmware RNG seed
+
+  # Edge-tier node: Python model (socket-based)
+  - id: gateway
+    type: gateway
+    implementation: python_model
+    port: 5001
+
+  # Cloud-tier node: Python model (socket-based)
+  - id: cloud
+    type: cloud
+    implementation: python_model
+    port: 5002
