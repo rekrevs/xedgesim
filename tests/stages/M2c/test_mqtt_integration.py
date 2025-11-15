@@ -67,25 +67,24 @@ def mqtt_broker():
     # Create DockerNode for broker
     config = {
         "image": "xedgesim/mosquitto:latest",
-        "build_context": "containers/mqtt-broker"
+        "build_context": "containers/mqtt-broker",
+        "ports": {1883: 1883}  # Map port 1883 for localhost access
     }
 
     broker = DockerNode("mqtt-broker", config, seed=42)
 
     # Start broker container
-    broker.create()
-    broker.start_container()
+    broker.start()
 
     # Wait for broker to be ready
+    broker.wait_for_ready()
     time.sleep(2)
 
-    # Get broker IP
-    broker.container.reload()
-    broker_ip = broker.container.attrs['NetworkSettings']['IPAddress']
-
+    # On macOS/Colima, use localhost instead of container IP
+    # Container IP (172.17.x.x) is not accessible from host
     yield {
         'node': broker,
-        'ip': broker_ip,
+        'ip': 'localhost',  # Use localhost for macOS/Colima compatibility
         'port': 1883
     }
 
