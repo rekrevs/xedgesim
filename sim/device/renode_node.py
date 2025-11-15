@@ -213,9 +213,10 @@ class RenodeNode:
         # Connect to monitor port
         self._connect_monitor()
 
-        # Send initial 'start' command to begin emulation
-        response = self._send_command('start')
-        print(f"[RenodeNode:{self.node_id}] Emulation started")
+        # Note: We don't send 'start' here because RunFor will start
+        # the emulation automatically. Sending 'start' would cause
+        # continuous execution which conflicts with time-stepped control.
+        print(f"[RenodeNode:{self.node_id}] Ready for time-stepped execution")
 
     def _create_renode_script(self) -> Path:
         """
@@ -261,8 +262,9 @@ showAnalyzer {self.uart_device}
 # Quantum: minimum time step in virtual seconds
 emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
 
-# Disable immediate advancement (wait for RunFor commands)
-emulation SetAdvanceImmediately false
+# Note: We don't use SetAdvanceImmediately false because it prevents
+# the start command from working properly. Instead, we control time
+# advancement explicitly using start followed by RunFor commands.
 
 # Ready for time stepping from coordinator
 """
