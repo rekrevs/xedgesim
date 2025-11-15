@@ -34,6 +34,8 @@ def get_docker_client():
     - DOCKER_HOST environment variable (if set)
     - /var/run/docker.sock (Linux default)
     - ~/.docker/run/docker.sock (macOS Docker Desktop)
+    - ~/.colima/default/docker.sock (macOS Colima)
+    - ~/.colima/docker.sock (macOS Colima alternative)
 
     Returns:
         docker.DockerClient: Connected Docker client
@@ -45,6 +47,8 @@ def get_docker_client():
         None,  # Default (will use DOCKER_HOST env var if set)
         'unix:///var/run/docker.sock',  # Linux default
         f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',  # macOS Docker Desktop
+        f'unix://{os.path.expanduser("~/.colima/default/docker.sock")}',  # macOS Colima
+        f'unix://{os.path.expanduser("~/.colima/docker.sock")}',  # macOS Colima alternative
     ]
 
     last_error = None
