@@ -32,12 +32,16 @@ def is_docker_available():
     - DOCKER_HOST environment variable (if set)
     - /var/run/docker.sock (Linux default)
     - ~/.docker/run/docker.sock (macOS Docker Desktop)
+    - ~/.colima/default/docker.sock (macOS Colima)
+    - ~/.colima/docker.sock (macOS Colima alternative)
     """
     # Try multiple socket locations
     socket_locations = [
         None,  # Default (will use DOCKER_HOST env var if set)
         'unix:///var/run/docker.sock',  # Linux default
         f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',  # macOS Docker Desktop
+        f'unix://{os.path.expanduser("~/.colima/default/docker.sock")}',  # macOS Colima
+        f'unix://{os.path.expanduser("~/.colima/docker.sock")}',  # macOS Colima alternative
     ]
 
     for base_url in socket_locations:
@@ -68,6 +72,8 @@ def get_docker_client():
         None,
         'unix:///var/run/docker.sock',
         f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',
+        f'unix://{os.path.expanduser("~/.colima/default/docker.sock")}',
+        f'unix://{os.path.expanduser("~/.colima/docker.sock")}',
     ]
 
     for base_url in socket_locations:
