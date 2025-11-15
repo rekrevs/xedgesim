@@ -339,7 +339,110 @@ These are intentional for M2c scope and acceptable for ML placement experiments 
 
 ---
 
-**Status:** IMPLEMENTED (awaiting Docker testing)
+## Delegated Testing Results
+
+**Testing Task:** `claude/tasks/TASK-M2C-mqtt-tests.md`
+**Testing Results:** `claude/results/TASK-M2C-mqtt-tests.md`
+**Status:** ✅ SUCCESS
+**Completed:** 2025-11-15
+**Duration:** 20 minutes
+
+### Test Execution Summary
+
+Testing agent ran full M2c integration test suite on macOS/Colima:
+
+**M2c Integration Tests:** 6/6 PASSED ✅
+- `test_mosquitto_broker_starts`: ✅ Broker starts and logs version
+- `test_mqtt_client_can_connect`: ✅ Raw MQTT client connection works
+- `test_sensor_node_mqtt_publish`: ✅ Sensor publishes without errors
+- `test_gateway_node_mqtt_subscribe`: ✅ Gateway subscribes successfully
+- `test_end_to_end_mqtt_flow`: ✅ Complete sensor → broker → gateway flow
+- `test_multiple_sensors_to_gateway`: ✅ Fan-in pattern (2 sensors, 1 gateway)
+
+**Regression Tests:** ALL PASSED ✅
+- M1d latency network model: 8/8 passed
+- M1e network metrics: 8/8 passed
+- M2a basic tests: 3/3 passed
+- M2b socket tests: 5/5 passed
+
+**Total:** 30/30 tests passed
+
+### Issues Found and Fixed
+
+Testing agent discovered two issues during initial test runs:
+
+**Issue 1: Incorrect DockerNode API in Tests**
+- **Problem:** Test fixture called `broker.create()` and `broker.start_container()` which don't exist
+- **Root Cause:** Developer agent used incorrect API that didn't match M2a implementation
+- **Fix:** Changed to `broker.start()` and `broker.wait_for_ready()` (correct API)
+- **File:** `tests/stages/M2c/test_mqtt_integration.py:75-80`
+
+**Issue 2: macOS/Colima Networking**
+- **Problem:** Tests tried to connect to container's internal IP (172.17.0.x), which is not accessible on macOS/Colima (containers run in Linux VM)
+- **Root Cause:** Same networking pattern as M2b echo service - macOS requires port mapping
+- **Fix:**
+  - Added port mapping to broker config: `"ports": {1883: 1883}`
+  - Changed connection from container IP to `localhost`
+- **File:** `tests/stages/M2c/test_mqtt_integration.py:68-89`
+
+Both issues were fixed by testing agent and committed.
+
+### Testing Environment
+
+- **OS:** macOS Sequoia (Darwin 25.1.0)
+- **Architecture:** arm64 (Apple Silicon)
+- **Docker Runtime:** Colima using macOS Virtualization.Framework
+- **Python:** 3.12.9
+- **paho-mqtt:** 2.1.0
+- **Mosquitto:** eclipse-mosquitto:2.0
+
+### Final Acceptance Criteria Status
+
+All 8 acceptance criteria from M2c objectives: ✅ COMPLETE
+
+1. ✅ Mosquitto broker Dockerfile created → IMPLEMENTED
+2. ✅ Broker runs in Docker container → VALIDATED
+3. ✅ Python nodes can connect to broker → VALIDATED
+4. ✅ Sensor publishes messages to topic → VALIDATED
+5. ✅ Gateway subscribes and receives messages → VALIDATED
+6. ✅ End-to-end test passes: sensor → broker → gateway → VALIDATED
+7. ✅ Broker container cleanup working → VALIDATED
+8. ✅ All M0-M1e-M2a-M2b tests still pass → VALIDATED
+
+### Known Warnings (Non-Blocking)
+
+paho-mqtt v2.1.0 shows deprecation warnings for callback API version 1:
+```
+DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+```
+
+Affects:
+- `sim/device/sensor_node.py:277`
+- `sim/edge/gateway_node.py:274`
+- `tests/stages/M2c/test_mqtt_integration.py:115`
+
+**Impact:** None - current implementation works correctly
+**Recommendation:** Consider updating to callback API version 2 in future work (M3+)
+
+### Lessons Learned
+
+**macOS/Colima Networking Pattern (3rd occurrence):**
+
+This is the third time we've encountered macOS/Colima networking limitations:
+1. M2a Docker lifecycle tests
+2. M2b echo service testing
+3. M2c MQTT broker testing
+
+**Standard Solution:**
+1. Add port mapping: `"ports": {container_port: host_port}`
+2. Connect via `localhost` instead of container IP
+3. Document in test fixtures
+
+This should be codified as a testing best practice.
+
+---
+
+**Status:** ✅ COMPLETE & VALIDATED
 **Estimated Time:** 3-4 hours (implementation) + testing delegation
 **Started:** 2025-11-15
 **Implemented:** 2025-11-15
