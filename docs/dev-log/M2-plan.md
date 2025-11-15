@@ -1,8 +1,26 @@
 # M2 Plan: Edge Realism and Deployability
 
 **Date:** 2025-11-15
-**Status:** Planning
+**Status:** ✅ COMPLETE
 **Major Stage:** M2 - Add Edge Realism
+**Completed:** 2025-11-15 (commits 7382edd → b7cd774)
+
+---
+
+## M2 Completion Summary
+
+**All 5 minor stages complete:**
+- ✅ M2a: Docker Node Abstraction (commit 7382edd)
+- ✅ M2b: Socket Communication (commit 7496fff)
+- ✅ M2c: MQTT Broker Integration (commit 30a4806, tested 9d02c6a)
+- ✅ M2d: Hybrid Edge Tier (commit f5a7d40)
+- ✅ M2e: Deployability Documentation (commit b7cd774)
+
+**Total implementation time:** ~12 hours (2 working days)
+**Tests:** 46/46 passed (30 M2c + 8 M2d + 8 regression)
+**Documentation:** 5 reports + deployability guide + deployment script
+
+**Key Achievement:** xEdgeSim now supports Docker containers as edge nodes, enabling realistic edge simulations and sim-to-prod deployability.
 
 ---
 
@@ -192,7 +210,7 @@ Following wow.md Section 3, here are the initial 2-5 minor stages. This plan wil
 
 **Deferred**: Full scenario runner (M3+), automatic node instantiation, runtime switching
 
-### M2e: Deployability Documentation
+### M2e: Deployability Documentation ✅ COMPLETE
 
 **Objective**: Document how to deploy the same Docker containers used in simulation to real edge hardware.
 
@@ -206,9 +224,23 @@ Following wow.md Section 3, here are the initial 2-5 minor stages. This plan wil
 - Document container registry usage (optional Docker Hub push)
 
 **Acceptance criteria**:
-- Documented path from simulation to deployment
-- Example deployment script for MQTT broker container
-- Clear explanation of sim vs prod differences
+- ✅ Documented path from simulation to deployment
+- ✅ Example deployment script for MQTT broker container
+- ✅ Clear explanation of sim vs prod differences
+
+**Completed**: 2025-11-15 (commit b7cd774)
+- `docs/deployability.md`: 350+ lines comprehensive guide
+  - Deployability path diagram (4 stages)
+  - MQTT broker deployment walkthrough
+  - Sim vs prod comparison table (6 differences)
+  - Edge hardware guidance (Raspberry Pi, x86_64)
+  - Docker Compose multi-container example
+  - Troubleshooting guide (4 common issues)
+- `scripts/deploy_to_edge.sh`: 200+ lines automated deployment
+  - SSH-based deployment to edge devices
+  - Image transfer and loading
+  - Production config deployment
+  - Resource limits and health checks
 
 **Deferred**: Full deployment automation, CI/CD integration (M4)
 
