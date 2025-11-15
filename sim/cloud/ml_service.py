@@ -20,11 +20,20 @@ import sys
 import json
 import time
 
+# Add parent directory to path for model imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 # Check dependencies
 try:
     import torch
 except ImportError:
     print("Error: torch not installed. Install with: pip install torch", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    from models.simple_anomaly_detector import SimpleAnomalyDetector
+except ImportError:
+    print("Error: Could not import SimpleAnomalyDetector model", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -73,7 +82,9 @@ class CloudMLService:
             raise FileNotFoundError(f"Model not found: {self.model_path}")
 
         # Load PyTorch model
-        self.model = torch.load(self.model_path)
+        # Note: weights_only=False is needed for models saved with torch.save(model, ...)
+        # This is safe for our test models created locally
+        self.model = torch.load(self.model_path, weights_only=False)
         self.model.eval()  # Set to evaluation mode
 
         print(f"Model loaded successfully", flush=True)
