@@ -69,7 +69,7 @@ def create_onnx_model(output_path="models/anomaly_detector.onnx", input_dim=32):
             'features': {0: 'batch_size'},
             'probability': {0: 'batch_size'}
         },
-        opset_version=11
+        opset_version=9  # Compatible with ONNX Runtime 1.16.0
     )
 
     print(f"✓ ONNX model saved to {output_path}")
