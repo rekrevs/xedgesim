@@ -18,6 +18,10 @@ dist/
 results/raw_logs/
 results/processed/
 
+# Test outputs
+test_output_*/
+*_metrics.csv
+
 # LaTeX
 paper/*.aux
 paper/*.log
