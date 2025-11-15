@@ -1,5 +1,5 @@
 """
-scenario.py - YAML Scenario Parser (M1b)
+scenario.py - YAML Scenario Parser (M1b, extended in M1d)
 
 Parses simulation scenarios from YAML configuration files.
 
@@ -14,6 +14,16 @@ Example YAML:
       seed: 42
       time_quantum_us: 1000
 
+    network:  # M1d: Optional network configuration
+      model: latency  # "direct" or "latency"
+      default_latency_us: 10000
+      default_loss_rate: 0.0
+      links:
+        - src: sensor1
+          dst: gateway
+          latency_us: 5000
+          loss_rate: 0.01
+
     nodes:
       - id: sensor1
         type: sensor_model
@@ -21,9 +31,50 @@ Example YAML:
 """
 
 import yaml
-from dataclasses import dataclass
-from typing import List, Dict, Any
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+
+@dataclass
+class NetworkLink:
+    """Network link configuration (M1d)."""
+    src: str
+    dst: str
+    latency_us: int
+    loss_rate: float = 0.0
+
+
+@dataclass
+class NetworkConfig:
+    """
+    Network model configuration (M1d).
+
+    Attributes:
+        model: Network model type ("direct" or "latency")
+        default_latency_us: Default latency for unconfigured links
+        default_loss_rate: Default packet loss rate (0.0 = no loss)
+        links: List of per-link configurations
+    """
+    model: str = "direct"
+    default_latency_us: int = 10000
+    default_loss_rate: float = 0.0
+    links: List[NetworkLink] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Validate network configuration."""
+        if self.model not in ["direct", "latency"]:
+            raise ValueError(f"network.model must be 'direct' or 'latency', got '{self.model}'")
+
+        if self.default_latency_us < 0:
+            raise ValueError(f"default_latency_us must be non-negative, got {self.default_latency_us}")
+
+        if not (0.0 <= self.default_loss_rate <= 1.0):
+            raise ValueError(f"default_loss_rate must be in [0.0, 1.0], got {self.default_loss_rate}")
+
+        for link in self.links:
+            if not (0.0 <= link.loss_rate <= 1.0):
+                raise ValueError(f"Link {link.src}->{link.dst}: loss_rate must be in [0.0, 1.0], got {link.loss_rate}")
 
 
 @dataclass
@@ -36,11 +87,13 @@ class Scenario:
         seed: Random seed for deterministic execution
         time_quantum_us: Time step size in microseconds
         nodes: List of node configurations (dicts with id, type, port)
+        network: Optional network configuration (M1d)
     """
     duration_s: float
     seed: int
     time_quantum_us: int
     nodes: List[Dict[str, Any]]
+    network: Optional[NetworkConfig] = None
 
     def __post_init__(self):
         """Validate scenario after initialization."""
@@ -136,10 +189,62 @@ def load_scenario(yaml_path: str) -> Scenario:
             'port': int(node['port'])
         })
 
+    # Parse network configuration (M1d - optional)
+    network_config = None
+    if 'network' in data:
+        net = data['network']
+        if not isinstance(net, dict):
+            raise ValueError("'network' section must be a dict")
+
+        # Parse network model type
+        model = net.get('model', 'direct')
+
+        # Parse defaults
+        default_latency_us = int(net.get('default_latency_us', 10000))
+        default_loss_rate = float(net.get('default_loss_rate', 0.0))
+
+        # Parse links
+        links = []
+        if 'links' in net:
+            link_list = net['links']
+            if not isinstance(link_list, list):
+                raise ValueError("network.links must be a list")
+
+            for i, link in enumerate(link_list):
+                if not isinstance(link, dict):
+                    raise ValueError(f"Link {i} must be a dict, got {type(link)}")
+
+                if 'src' not in link:
+                    raise ValueError(f"Link {i}: Missing required field 'src'")
+                if 'dst' not in link:
+                    raise ValueError(f"Link {i}: Missing required field 'dst'")
+
+                # latency_us is required for links in latency model
+                if model == 'latency' and 'latency_us' not in link:
+                    raise ValueError(f"Link {i} ({link['src']}->{link['dst']}): Missing required field 'latency_us' for latency model")
+
+                latency_us = int(link.get('latency_us', default_latency_us))
+                loss_rate = float(link.get('loss_rate', default_loss_rate))
+
+                links.append(NetworkLink(
+                    src=link['src'],
+                    dst=link['dst'],
+                    latency_us=latency_us,
+                    loss_rate=loss_rate
+                ))
+
+        network_config = NetworkConfig(
+            model=model,
+            default_latency_us=default_latency_us,
+            default_loss_rate=default_loss_rate,
+            links=links
+        )
+
     # Create and return scenario
     return Scenario(
         duration_s=float(duration_s),
         seed=int(seed),
         time_quantum_us=int(time_quantum_us),
-        nodes=validated_nodes
+        nodes=validated_nodes,
+        network=network_config
     )

@@ -253,8 +253,30 @@ def main():
         from sim.config.scenario import load_scenario
         scenario = load_scenario(scenario_path)
 
-        # Create coordinator with scenario parameters
-        coordinator = Coordinator(time_quantum_us=scenario.time_quantum_us)
+        # M1d: Create network model based on scenario configuration
+        network_model = None
+        if scenario.network:
+            if scenario.network.model == "direct":
+                from sim.network.direct_model import DirectNetworkModel
+                network_model = DirectNetworkModel()
+                print(f"[Coordinator] Using DirectNetworkModel (zero-latency)")
+            elif scenario.network.model == "latency":
+                from sim.network.latency_model import LatencyNetworkModel
+                network_model = LatencyNetworkModel(scenario.network, scenario.seed)
+                print(f"[Coordinator] Using LatencyNetworkModel")
+                print(f"  Default latency: {scenario.network.default_latency_us}us")
+                print(f"  Default loss rate: {scenario.network.default_loss_rate * 100:.1f}%")
+                if scenario.network.links:
+                    print(f"  Configured links: {len(scenario.network.links)}")
+            else:
+                raise ValueError(f"Unknown network model: {scenario.network.model}")
+        # If no network section, network_model stays None (Coordinator defaults to DirectNetworkModel)
+
+        # Create coordinator with scenario parameters and network model
+        coordinator = Coordinator(
+            time_quantum_us=scenario.time_quantum_us,
+            network_model=network_model
+        )
 
         # Register nodes from scenario
         for node in scenario.nodes:
