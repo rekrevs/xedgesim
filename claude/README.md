@@ -19,16 +19,50 @@ claude/
 
 ### Developer Agent Creates Task
 
-When developer agent needs Docker testing:
+When developer agent needs Docker/Renode/Zephyr testing or any task requiring tools not available locally:
 
-1. **Create task file:** `claude/tasks/TASK-NAME.md`
-2. **Commit and push:**
+**CRITICAL: Developer agent MUST follow this sequence exactly:**
+
+1. **Complete all local work:**
+   - Finish all code implementation for the current stage
+   - Run all local tests
+   - Complete all documentation
+   - Ensure stage is ready for delegation
+
+2. **Commit and push ALL changes:**
    ```bash
-   git add claude/tasks/TASK-NAME.md
-   git commit -m "task: Delegate TASK-NAME"
+   git add [all stage files]
+   git commit -m "Mxy: [stage description]"
    git push
    ```
-3. **STOP** and notify user to switch to testing agent
+   **⚠️ ALL production code, tests, and documentation MUST be pushed BEFORE creating task file**
+
+3. **Create delegation task file:** `claude/tasks/TASK-NAME.md`
+   - Include clear instructions for testing agent
+   - Reference all files that need testing
+   - Specify expected results and debugging guidance
+
+4. **Commit and push task file:**
+   ```bash
+   git add claude/tasks/TASK-NAME.md
+   git commit -m "task: Delegate TASK-NAME for Mxy testing"
+   git push
+   ```
+
+5. **STOP IMMEDIATELY and notify user:**
+   ```
+   ✅ Mxy stage complete and committed
+   ⏸️ Testing requires [Docker/Renode/Zephyr/etc]
+   📋 Created delegation task: claude/tasks/TASK-NAME.md
+
+   Please switch to testing agent to complete:
+   - [List what needs testing]
+
+   Testing agent should run:
+   Do the task in claude/tasks/TASK-NAME.md
+   ```
+
+   **⚠️ CRITICAL: Developer agent MUST NOT continue to next stage until testing results are back**
 
 ### User Switches to Testing Agent
 
