@@ -175,15 +175,15 @@ We will achieve these through minor stages:
 |-------------|--------|--------|--------|
 | M1a: Test reorg | ✅ COMPLETE | M1a | M1a-report.md |
 | M1b: YAML parser | ✅ COMPLETE | M1b | M1b-report.md |
-| M1c: Network abstraction | PENDING | - | - |
+| M1c: Network abstraction | ✅ COMPLETE | 6a7513c | M1c-report.md |
 | M1d: Latency model | PENDING | - | - |
 | M1e: Metrics | PENDING | - | - |
 | M1f: ns-3 | DEFERRED? | - | - |
 
 ---
 
-**Last Updated:** 2025-11-14 (After M1a)
-**Next Review:** After M1b completion
+**Last Updated:** 2025-11-15 (After M1c)
+**Next Review:** After M1d completion
 
 ## Stage Completion Notes
 
@@ -202,4 +202,16 @@ We will achieve these through minor stages:
 - M0 backward compatibility verified
 - Determinism maintained with YAML configs
 - Ready for M1c (Network Abstraction)
+
+### M1c ✅
+- NetworkModel abstraction layer implemented
+- NetworkModel ABC: 3 methods (route_message, advance_to, reset)
+- DirectNetworkModel: zero-latency, stateless (validates abstraction)
+- Coordinator updated to use NetworkModel (backward compatible)
+- Unit tests: 7 interface tests + 7 DirectNetworkModel tests = 14/14 passed
+- Integration tests: 3/3 passed
+- M0 determinism maintained (hash: d376231ff78a...)
+- M1b YAML scenarios still work (2/2 integration tests pass)
+- Total: ~800 LOC (including tests and docs)
+- Ready for M1d (Latency Network Model)
 
