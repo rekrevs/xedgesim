@@ -149,8 +149,9 @@ class DockerNode:
                 "xedgesim_node_id": self.node_id
             },
             environment=self.config.get("environment", {}),
-            # Ports and volumes will be added in M2b/M2c
+            # Ports and volumes added in M2b/M2c/M3a
             ports=self.config.get("ports", {}),
+            volumes=self.config.get("volumes", {}),
             # Auto-remove disabled so we can inspect after shutdown if needed
             auto_remove=False,
         )

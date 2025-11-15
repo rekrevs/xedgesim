@@ -67,7 +67,8 @@ class MLInferenceService:
             raise FileNotFoundError(f"Model not found: {self.model_path}")
 
         # Create ONNX Runtime session
-        self.session = ort.InferenceSession(self.model_path)
+        # Explicitly set providers (required in ONNX Runtime 1.9+)
+        self.session = ort.InferenceSession(self.model_path, providers=['CPUExecutionProvider'])
 
         # Get input/output names
         self.input_name = self.session.get_inputs()[0].name

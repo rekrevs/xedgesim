@@ -2,9 +2,9 @@ FROM python:3.9-slim
 
 # Install dependencies
 RUN pip install --no-cache-dir \
-    onnxruntime==1.16.0 \
+    onnxruntime>=1.18.0 \
     paho-mqtt>=1.6.1 \
-    numpy>=1.24.0
+    "numpy>=1.24.0,<2.0.0"
 
 # Create app directory
 WORKDIR /app
