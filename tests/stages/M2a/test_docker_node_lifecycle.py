@@ -6,6 +6,7 @@ Tests Docker container creation, startup, shutdown, and cleanup.
 """
 
 import sys
+import os
 import time
 from pathlib import Path
 
@@ -24,13 +25,35 @@ from sim.edge.docker_node import DockerNode, cleanup_xedgesim_containers
 
 # Check if Docker daemon is running
 def is_docker_available():
-    """Check if Docker daemon is accessible."""
-    try:
-        client = docker.from_env()
-        client.ping()
-        return True
-    except Exception:
-        return False
+    """
+    Check if Docker daemon is accessible.
+
+    Tries multiple socket locations to handle different Docker installations:
+    - DOCKER_HOST environment variable (if set)
+    - /var/run/docker.sock (Linux default)
+    - ~/.docker/run/docker.sock (macOS Docker Desktop)
+    """
+    # Try multiple socket locations
+    socket_locations = [
+        None,  # Default (will use DOCKER_HOST env var if set)
+        'unix:///var/run/docker.sock',  # Linux default
+        f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',  # macOS Docker Desktop
+    ]
+
+    for base_url in socket_locations:
+        try:
+            if base_url:
+                client = docker.DockerClient(base_url=base_url)
+            else:
+                client = docker.from_env()
+
+            client.ping()
+            client.close()
+            return True
+        except Exception:
+            continue
+
+    return False
 
 
 pytestmark = pytest.mark.skipif(
@@ -39,10 +62,30 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def get_docker_client():
+    """Get Docker client, trying multiple socket locations."""
+    socket_locations = [
+        None,
+        'unix:///var/run/docker.sock',
+        f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',
+    ]
+
+    for base_url in socket_locations:
+        try:
+            if base_url:
+                return docker.DockerClient(base_url=base_url)
+            else:
+                return docker.from_env()
+        except Exception:
+            continue
+
+    raise RuntimeError("Could not connect to Docker daemon")
+
+
 @pytest.fixture(scope="function")
 def docker_client():
     """Provide Docker client and cleanup after each test."""
-    client = docker.from_env()
+    client = get_docker_client()
 
     # Pre-test cleanup (in case previous test failed)
     cleanup_xedgesim_containers(client)

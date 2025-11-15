@@ -11,6 +11,7 @@ M2b: Socket communication (send/receive events via TCP)
 import time
 import socket
 import json
+import os
 
 # Optional docker import (allows module to be imported even without Docker installed)
 try:
@@ -23,6 +24,48 @@ except ImportError:
     ImageNotFound = Exception
     APIError = Exception
     DOCKER_AVAILABLE = False
+
+
+def get_docker_client():
+    """
+    Get Docker client, trying multiple socket locations.
+
+    Handles different Docker installations:
+    - DOCKER_HOST environment variable (if set)
+    - /var/run/docker.sock (Linux default)
+    - ~/.docker/run/docker.sock (macOS Docker Desktop)
+
+    Returns:
+        docker.DockerClient: Connected Docker client
+
+    Raises:
+        RuntimeError: If cannot connect to Docker daemon
+    """
+    socket_locations = [
+        None,  # Default (will use DOCKER_HOST env var if set)
+        'unix:///var/run/docker.sock',  # Linux default
+        f'unix://{os.path.expanduser("~/.docker/run/docker.sock")}',  # macOS Docker Desktop
+    ]
+
+    last_error = None
+    for base_url in socket_locations:
+        try:
+            if base_url:
+                client = docker.DockerClient(base_url=base_url)
+            else:
+                client = docker.from_env()
+
+            # Test connection
+            client.ping()
+            return client
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(
+        f"Could not connect to Docker daemon. Tried multiple socket locations. "
+        f"Last error: {last_error}"
+    )
 
 
 class DockerNode:
@@ -80,7 +123,7 @@ class DockerNode:
                 "https://docs.docker.com/get-docker/"
             )
 
-        self.client = docker.from_env()
+        self.client = get_docker_client()
 
         # Pull image if not present (may take time on first run)
         try:
