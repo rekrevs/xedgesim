@@ -17,6 +17,8 @@ import subprocess
 import json
 import time
 import sys
+import threading
+import queue
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -60,6 +62,10 @@ class DockerProtocolAdapter(NodeAdapter):
         self.container_id = container_id
         self.process: Optional[subprocess.Popen] = None
         self.connected = False
+        self.stdout_queue: queue.Queue = queue.Queue()
+        self.stderr_queue: queue.Queue = queue.Queue()
+        self.stdout_thread: Optional[threading.Thread] = None
+        self.stderr_thread: Optional[threading.Thread] = None
 
     def connect(self):
         """
@@ -93,14 +99,32 @@ class DockerProtocolAdapter(NodeAdapter):
             # -i: Keep stdin open
             # -u: Run Python in unbuffered mode (critical for stdin/stdout protocol)
             # Container entrypoint should be running the service with protocol adapter
+            #
+            # IMPORTANT: We capture stderr separately but read it in a background thread
+            # to prevent the stderr buffer from filling (65KB limit) and blocking the process
             self.process = subprocess.Popen(
                 ['docker', 'exec', '-i', self.container_id, 'python', '-u', '-m', 'service'],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.PIPE,  # Capture stderr separately
                 text=True,
                 bufsize=0  # Unbuffered for real-time communication
             )
+
+            # Start background threads to continuously read stdout and stderr
+            # This prevents buffers from filling and blocking the process
+            # Also solves the select() vs TextIOWrapper buffering issue
+            self.stdout_thread = threading.Thread(
+                target=self._stdout_reader,
+                daemon=True
+            )
+            self.stdout_thread.start()
+
+            self.stderr_thread = threading.Thread(
+                target=self._stderr_reader,
+                daemon=True
+            )
+            self.stderr_thread.start()
 
             self.connected = True
             print(f"[DockerProtocolAdapter] Connected to container {self.container_id} for node {self.node_id}")
@@ -134,7 +158,7 @@ class DockerProtocolAdapter(NodeAdapter):
         # Wait for READY response
         response = self._read_line()
         if response != "READY":
-            stderr_output = self._read_stderr()
+            stderr_output = self._get_stderr()
             raise RuntimeError(
                 f"Expected READY from container {self.node_id}, got: {response}\n"
                 f"Container stderr: {stderr_output}"
@@ -201,7 +225,7 @@ class DockerProtocolAdapter(NodeAdapter):
         print(f"[DockerProtocolAdapter] Received: {response}")
 
         if response != "DONE":
-            stderr_output = self._read_stderr()
+            stderr_output = self._get_stderr()
             raise RuntimeError(
                 f"Expected DONE from container {self.node_id}, got: {response}\n"
                 f"Container stderr: {stderr_output}"
@@ -269,93 +293,94 @@ class DockerProtocolAdapter(NodeAdapter):
             self.process.stdin.write(line + '\n')
             self.process.stdin.flush()
         except BrokenPipeError:
-            stderr_output = self._read_stderr()
             raise RuntimeError(
-                f"Container {self.node_id} stdin closed unexpectedly\n"
-                f"Container stderr: {stderr_output}"
+                f"Container {self.node_id} stdin closed unexpectedly"
             )
+
+    def _stdout_reader(self):
+        """
+        Background thread to continuously read stdout.
+
+        This solves the select() vs TextIOWrapper buffering issue where
+        readline() pre-buffers multiple lines into Python's internal buffer,
+        making them invisible to select().
+        """
+        try:
+            while self.process and self.process.poll() is None:
+                line = self.process.stdout.readline()
+                if not line:
+                    break
+                # Store stdout lines in queue
+                self.stdout_queue.put(line.rstrip('\n'))
+        except:
+            pass  # Thread will exit when process dies
+
+    def _stderr_reader(self):
+        """
+        Background thread to continuously read stderr.
+
+        This prevents the stderr buffer from filling (65KB limit) which would
+        block the child process when it tries to write to stderr.
+        """
+        try:
+            while self.process and self.process.poll() is None:
+                line = self.process.stderr.readline()
+                if not line:
+                    break
+                # Store stderr lines in queue for debugging
+                self.stderr_queue.put(line.rstrip('\n'))
+        except:
+            pass  # Thread will exit when process dies
 
     def _read_line(self, timeout: float = 10.0) -> str:
         """
-        Read a line from container stdout.
+        Read a line from container stdout via queue.
+
+        The stdout is read by a background thread to avoid the select() vs
+        TextIOWrapper buffering issue where readline() pre-buffers multiple
+        lines making them invisible to select().
 
         Args:
             timeout: Maximum time to wait for line
 
         Returns:
-            Line from stdout (stripped)
+            Line from stdout (already stripped)
 
         Raises:
             RuntimeError: If timeout or read error
         """
-        import select
-
-        start_time = time.time()
-        attempts = 0
-
-        while time.time() - start_time < timeout:
-            # Check if data available (non-blocking)
-            ready, _, _ = select.select([self.process.stdout], [], [], 0.1)
-            attempts += 1
-
-            if ready:
-                print(f"[DockerProtocolAdapter] Data available on stdout after {attempts} attempts ({time.time() - start_time:.2f}s)")
-                line = self.process.stdout.readline()
-                if not line:
-                    # EOF
-                    stderr_output = self._read_stderr()
-                    raise RuntimeError(
-                        f"Container {self.node_id} stdout closed unexpectedly\n"
-                        f"Container stderr: {stderr_output}"
-                    )
-                return line.strip()
-
+        try:
+            line = self.stdout_queue.get(timeout=timeout)
+            return line
+        except queue.Empty:
             # Check if process died
             if self.process.poll() is not None:
-                stderr_output = self._read_stderr()
+                stderr_output = self._get_stderr()
                 raise RuntimeError(
                     f"Container {self.node_id} process exited unexpectedly "
                     f"(exit code {self.process.returncode})\n"
                     f"Container stderr: {stderr_output}"
                 )
 
-            # Log progress every 5 seconds
-            if attempts % 50 == 0:  # 50 * 0.1s = 5s
-                elapsed = time.time() - start_time
-                print(f"[DockerProtocolAdapter] Still waiting for stdout... ({elapsed:.1f}s elapsed)")
+            # Timeout
+            stderr_output = self._get_stderr()
+            raise RuntimeError(
+                f"Timeout waiting for response from container {self.node_id} after {timeout:.1f}s\n"
+                f"Container stderr: {stderr_output}"
+            )
 
-        # Timeout
-        stderr_output = self._read_stderr()
-        print(f"[DockerProtocolAdapter] TIMEOUT after {time.time() - start_time:.2f}s, {attempts} attempts")
-        raise RuntimeError(
-            f"Timeout waiting for response from container {self.node_id}\n"
-            f"Container stderr: {stderr_output}"
-        )
-
-    def _read_stderr(self) -> str:
+    def _get_stderr(self) -> str:
         """
-        Read available stderr output from container (non-blocking).
+        Get all stderr output collected so far.
 
         Returns:
-            Stderr output if available, else empty string
+            Stderr output as string
         """
-        import select
+        lines = []
+        while not self.stderr_queue.empty():
+            try:
+                lines.append(self.stderr_queue.get_nowait())
+            except queue.Empty:
+                break
+        return '\n'.join(lines) if lines else "(no stderr output)"
 
-        stderr_lines = []
-
-        try:
-            # Non-blocking check for stderr
-            while True:
-                ready, _, _ = select.select([self.process.stderr], [], [], 0)
-                if not ready:
-                    break
-
-                line = self.process.stderr.readline()
-                if not line:
-                    break
-
-                stderr_lines.append(line.strip())
-        except:
-            pass
-
-        return '\n'.join(stderr_lines) if stderr_lines else "(no stderr output)"
