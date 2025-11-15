@@ -18,7 +18,7 @@ if str(_project_root) not in sys.path:
 
 from sim.harness.coordinator import Event
 from sim.network.latency_model import LatencyNetworkModel
-from sim.config.scenario import NetworkConfig, LinkConfig
+from sim.config.scenario import NetworkConfig
 
 
 class TestEventDataclass:
