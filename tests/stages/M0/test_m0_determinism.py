@@ -52,8 +52,11 @@ class SimulationRunner:
     def run_coordinator(self):
         """Run coordinator (blocking)."""
         print("[Test] Starting coordinator...")
+        # Find repository root (3 levels up from tests/stages/M0/)
+        repo_root = Path(__file__).parent.parent.parent.parent
+        coordinator_path = repo_root / "sim/harness/coordinator.py"
         result = subprocess.run(
-            [sys.executable, "../sim/harness/coordinator.py"],
+            [sys.executable, str(coordinator_path)],
             capture_output=True,
             text=True
         )
@@ -124,11 +127,12 @@ def run_single_test(test_name: str) -> str:
 
     try:
         # Start all nodes
-        base_dir = Path("..").resolve()
-        runner.start_node(str(base_dir / "sim/device/sensor_node.py"), 5001, "sensor1")
-        runner.start_node(str(base_dir / "sim/device/sensor_node.py"), 5002, "sensor2")
-        runner.start_node(str(base_dir / "sim/device/sensor_node.py"), 5003, "sensor3")
-        runner.start_node(str(base_dir / "sim/edge/gateway_node.py"), 5004, "gateway")
+        # Find repository root (3 levels up from tests/stages/M0/)
+        repo_root = Path(__file__).parent.parent.parent.parent if hasattr(Path(__file__), 'parent') else Path(".").resolve().parent.parent.parent
+        runner.start_node(str(repo_root / "sim/device/sensor_node.py"), 5001, "sensor1")
+        runner.start_node(str(repo_root / "sim/device/sensor_node.py"), 5002, "sensor2")
+        runner.start_node(str(repo_root / "sim/device/sensor_node.py"), 5003, "sensor3")
+        runner.start_node(str(repo_root / "sim/edge/gateway_node.py"), 5004, "gateway")
 
         # Wait for nodes to start
         runner.wait_for_nodes(2.0)
@@ -255,9 +259,12 @@ def main():
 ╚══════════════════════════════════════════════════════════════╝
     """)
 
-    # Make sure we're in the right directory
-    if not Path("sim/harness/coordinator.py").exists():
-        print("Error: Must run from xedgesim root directory")
+    # Make sure we can find the repository structure
+    # This test can be run from repo root or from tests/stages/M0/
+    repo_root = Path(__file__).parent.parent.parent.parent if hasattr(Path(__file__), 'parent') else Path(".")
+    if not (repo_root / "sim/harness/coordinator.py").exists():
+        print(f"Error: Cannot find sim/harness/coordinator.py from {repo_root}")
+        print(f"Current directory: {Path.cwd()}")
         sys.exit(1)
 
     # Run determinism test
