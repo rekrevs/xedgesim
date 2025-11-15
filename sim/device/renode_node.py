@@ -131,6 +131,7 @@ class RenodeNode:
         # UART buffer for incomplete lines
         self.uart_buffer = ""
         self.log_file_position = 0  # Track position in log file for incremental reads
+        self.event_buffer = []  # Buffer for events from future time steps
 
     def _validate_config(self):
         """
@@ -272,8 +273,8 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
 # the start command from working properly. Instead, we control time
 # advancement explicitly using start followed by RunFor commands.
 
-# Start emulation briefly to boot firmware, then pause for time-stepping
-# This allows firmware to initialize before coordinator takes control
+# Start emulation to boot firmware, then pause for time-stepping
+# Emulation mode emits all events immediately on boot, then idles
 start
 pause
 
@@ -462,7 +463,27 @@ pause
             print(f"[RenodeNode:{self.node_id}] Captured {len(uart_output)} bytes from UART")
 
         # Parse UART output from log file
-        events = self._parse_uart_output(uart_output, target_time_us)
+        # Pass both current and target time for filtering events by timestamp
+        new_events = self._parse_uart_output(
+            uart_output,
+            self.current_time_us,
+            target_time_us
+        )
+
+        # Check buffered events from previous time steps
+        # Return events that now fall within this time window: [current_time, target_time)
+        # Upper bound is exclusive to avoid double-counting boundary events
+        events = []
+        remaining_buffer = []
+        for event in self.event_buffer:
+            if self.current_time_us <= event.time_us < target_time_us:
+                events.append(event)
+            else:
+                remaining_buffer.append(event)
+        self.event_buffer = remaining_buffer
+
+        # Add newly parsed events
+        events.extend(new_events)
 
         # Update current time
         self.current_time_us = target_time_us
@@ -534,7 +555,8 @@ pause
     def _parse_uart_output(
         self,
         uart_text: str,
-        current_time: int
+        from_time_us: int,
+        to_time_us: int
     ) -> List[Event]:
         """
         Parse UART output text into simulation events.
@@ -545,16 +567,19 @@ pause
         This method:
         1. Extracts JSON objects from text (may have other output)
         2. Parses each JSON object as an event
-        3. Sets event time and source
+        3. Filters events by timestamp to match current time step
+        4. Sets event time and source
 
         Args:
             uart_text: Raw UART output text
-            current_time: Current virtual time (for events without timestamp)
+            from_time_us: Start of time window (exclusive)
+            to_time_us: End of time window (inclusive)
 
         Returns:
-            List of parsed events
+            List of parsed events within the time window: from_time_us < t <= to_time_us
 
         Note: Non-JSON output is ignored. Malformed JSON is logged and skipped.
+              Events outside the time window are buffered for future calls.
         """
         events = []
 
@@ -584,17 +609,28 @@ pause
             try:
                 data = json.loads(json_match.group())
 
+                # Get event timestamp
+                event_time_us = data.get('time', to_time_us)
+
                 # Create event from JSON
                 event = Event(
                     type=data.get('type', 'UART'),
-                    time_us=data.get('time', current_time),
+                    time_us=event_time_us,
                     src=self.node_id,
                     dst=data.get('dst'),
                     payload=data,
                     size_bytes=len(line)
                 )
 
-                events.append(event)
+                # Check if event is in current time window: [from_time, to_time)
+                # Lower bound inclusive, upper bound exclusive
+                # This ensures boundary events belong to the next step
+                if event_time_us < from_time_us or event_time_us >= to_time_us:
+                    # Event is for a future time step, buffer it
+                    self.event_buffer.append(event)
+                else:
+                    # Event is in current window
+                    events.append(event)
 
             except json.JSONDecodeError as e:
                 print(

@@ -149,31 +149,32 @@ int main(void)
 	 * xEdgeSim Emulation Mode
 	 *
 	 * Deterministic behavior for coordinator time-stepping tests:
-	 * - Emit exactly N samples at 1-second intervals
-	 * - Use k_sleep instead of k_usleep for better Renode compatibility
-	 * - Guaranteed one JSON event per second
+	 * - Emit all samples immediately on boot (no sleep/delays)
+	 * - Pre-assign timestamps at 1-second intervals
+	 * - Coordinator will filter/assign events to time steps
+	 *
+	 * This works with time-stepped execution because events are
+	 * emitted immediately, not dependent on virtual time advancement.
 	 */
 	printk("*** EMULATION MODE: Deterministic sampling ***\n");
 
 	#define NUM_SAMPLES 10
 
+	/* Emit all samples immediately with future timestamps */
 	for (int sample_idx = 0; sample_idx < NUM_SAMPLES; sample_idx++) {
 		/* Generate deterministic sample value */
 		float value = generate_sensor_sample();
 
-		/* Output JSON event with exact timestamp */
-		output_json_event("SAMPLE", value, current_time_us);
+		/* Calculate timestamp for this sample (1 second intervals) */
+		uint64_t sample_time_us = sample_idx * SAMPLE_INTERVAL_US;
 
-		/* Sleep for exactly 1 second */
-		k_sleep(K_SECONDS(1));
-
-		/* Advance virtual time by exactly 1 second */
-		current_time_us += SAMPLE_INTERVAL_US;
+		/* Output JSON event with assigned timestamp */
+		output_json_event("SAMPLE", value, sample_time_us);
 	}
 
 	printk("*** EMULATION MODE: %d samples emitted, entering idle ***\n", NUM_SAMPLES);
 
-	/* After emitting samples, sleep forever */
+	/* After emitting all samples, sleep forever */
 	while (1) {
 		k_sleep(K_FOREVER);
 	}
