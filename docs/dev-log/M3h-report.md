@@ -583,20 +583,66 @@ Allows registering any NodeAdapter implementation, not just socket-based nodes.
 
 ### 6.2 Delegated Integration Tests
 
-**Status:** PENDING (awaiting testing agent)
+**Status:** ⚠️ PARTIAL SUCCESS (1/7 tests passing, ADVANCE timeout issue)
 
 **Task file:**
 - `claude/tasks/TASK-M3h-protocol-integration-tests.md`
 
-**Expected deliverables:**
-- Sample echo service using protocol adapter
-- Docker integration tests with real containers
-- End-to-end scenario tests
-- Determinism validation (same seed → same results)
-- Regression testing (M0-M3g tests still pass)
-
-**Results file (to be created by testing agent):**
+**Results file:**
 - `claude/results/TASK-M3h-protocol-integration-tests.md`
+
+**Summary:**
+Testing agent successfully created:
+- ✅ Echo service implementation (containers/examples/echo_service.py)
+- ✅ Dockerfile and container image (xedgesim/echo-service)
+- ✅ Docker protocol integration tests (tests/integration/test_m3h_docker_protocol.py)
+
+**Test results:**
+- ✅ `test_protocol_init_success` - PASSED (INIT works, READY received)
+- ⚠️ `test_protocol_advance_no_events` - TIMEOUT
+- ⚠️ `test_protocol_advance_with_events` - TIMEOUT
+- ⚠️ `test_protocol_event_transformation` - TIMEOUT
+- ⚠️ `test_protocol_virtual_time` - TIMEOUT
+- ⚠️ `test_protocol_shutdown_clean` - TIMEOUT
+- ⚠️ `test_protocol_error_handling` - FAIL
+
+**Issue identified:**
+- INIT protocol works perfectly (bidirectional communication confirmed)
+- ADVANCE command times out waiting for DONE response
+- Container processes commands (confirmed in stderr logs)
+- Root cause: Likely buffering issue with docker exec stdin/stdout
+
+### 6.3 Debugging Work (Development Agent)
+
+**Changes made:**
+
+1. **Unbuffered I/O** (commit 7dad0c9):
+   - Added `-u` flag to run Python in unbuffered mode
+   - Changed Popen `bufsize` from 1 to 0 for unbuffered I/O
+   - Critical for real-time stdin/stdout communication
+
+2. **Verbose Logging** (commit 7dad0c9):
+   - Added logging to `send_advance()`: shows commands and events being sent
+   - Added logging to `wait_done()`: shows waiting state and responses received
+   - Added logging to `_read_line()`: shows data availability, progress, timeouts
+   - Helps diagnose exactly where timeout occurs
+
+3. **Manual Test Script** (commit ae7e3c1):
+   - Created `tests/manual/test_docker_protocol_manual.sh`
+   - Four test scenarios: INIT only, full protocol, with events, Python subprocess
+   - Test 4 mimics DockerProtocolAdapter behavior exactly
+   - Allows manual verification with Docker access
+
+4. **Debugging Guide** (commit ae7e3c1):
+   - Created `tests/manual/README.md`
+   - Manual debug steps (echo, strace, logs, timeout commands)
+   - Alternative approaches (sockets, main CMD, Docker SDK)
+   - Expected next steps for testing continuation
+
+**Next steps:**
+- Testing agent should re-run tests with verbose logging (`pytest -v -s`)
+- Run manual test script to verify unbuffered mode fixes timeout
+- If timeout persists, consider alternative approaches (sockets, Docker SDK)
 
 ---
 
