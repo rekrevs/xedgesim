@@ -1,11 +1,16 @@
 """
-docker_node.py - M2a Docker Node Implementation
+docker_node.py - M2a/M2b Docker Node Implementation
 
 Provides DockerNode class for running edge services in Docker containers.
-Manages container lifecycle and provides same interface as Python nodes.
+Manages container lifecycle and socket communication.
+
+M2a: Container lifecycle (create, start, stop, remove)
+M2b: Socket communication (send/receive events via TCP)
 """
 
 import time
+import socket
+import json
 
 # Optional docker import (allows module to be imported even without Docker installed)
 try:
@@ -58,6 +63,7 @@ class DockerNode:
 
         self.container = None
         self.client = None
+        self.sock = None  # M2b: Socket connection to container
 
     def start(self):
         """
@@ -135,24 +141,62 @@ class DockerNode:
             f"(status={self.container.status})"
         )
 
+    def connect_to_socket(self, timeout_s=10):
+        """
+        Connect to container's TCP socket (M2b).
+
+        Args:
+            timeout_s: Maximum time to wait for connection
+
+        Raises:
+            RuntimeError: If cannot connect to socket
+        """
+        if self.sock is not None:
+            return  # Already connected
+
+        # Get container IP address
+        self.container.reload()
+        container_ip = self.container.attrs['NetworkSettings']['IPAddress']
+        socket_port = self.config.get('socket_port', 5000)
+
+        # Retry connection (container service may take time to start)
+        start_time = time.time()
+        last_error = None
+
+        while time.time() - start_time < timeout_s:
+            try:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.settimeout(2.0)  # 2s timeout for socket operations
+                self.sock.connect((container_ip, socket_port))
+                print(f"Connected to container {self.node_id} at {container_ip}:{socket_port}")
+                return
+            except (ConnectionRefusedError, OSError) as e:
+                last_error = e
+                if self.sock:
+                    self.sock.close()
+                    self.sock = None
+                time.sleep(0.5)
+
+        raise RuntimeError(
+            f"Could not connect to container {self.node_id} socket at "
+            f"{container_ip}:{socket_port} after {timeout_s}s: {last_error}"
+        )
+
     def advance_to(self, target_time_us, incoming_events):
         """
         Advance container execution to target virtual time.
 
-        Implementation (M2a):
+        Implementation (M2b):
         - Sleeps for wall-clock time equivalent to virtual time delta
-        - Returns empty events list (no communication yet)
-
-        Future (M2b):
-        - Send incoming_events to container via socket
-        - Receive outgoing events from container
+        - Sends incoming_events to container via socket
+        - Receives outgoing events from container via socket
 
         Args:
             target_time_us: Target virtual time in microseconds
-            incoming_events: List of events to deliver to this node (unused in M2a)
+            incoming_events: List of events to deliver to this node
 
         Returns:
-            List of outgoing events (empty in M2a)
+            List of outgoing events from container
         """
         # Calculate time delta
         delta_us = target_time_us - self.current_time_us
@@ -170,8 +214,70 @@ class DockerNode:
         # Update current time
         self.current_time_us = target_time_us
 
-        # M2a: No events yet (M2b will add socket communication)
-        return []
+        # M2b: Send/receive events via socket (if connected)
+        if self.sock is not None:
+            # Send incoming events to container
+            for event in incoming_events:
+                self._send_event(event)
+
+            # Receive outgoing events from container
+            return self._receive_events()
+        else:
+            # No socket connection (M2a behavior)
+            return []
+
+    def _send_event(self, event):
+        """
+        Send event to container via socket (M2b).
+
+        Args:
+            event: Event dict to send
+        """
+        try:
+            msg = json.dumps(event) + '\n'
+            self.sock.sendall(msg.encode('utf-8'))
+        except (BrokenPipeError, OSError) as e:
+            print(f"Error sending event to container {self.node_id}: {e}")
+
+    def _receive_events(self):
+        """
+        Receive events from container via socket (M2b).
+
+        Uses non-blocking read to get all available events.
+
+        Returns:
+            List of event dicts
+        """
+        events = []
+
+        try:
+            # Set non-blocking mode
+            self.sock.setblocking(False)
+
+            buffer = ""
+            while True:
+                try:
+                    data = self.sock.recv(4096).decode('utf-8')
+                    if not data:
+                        break
+                    buffer += data
+                except BlockingIOError:
+                    # No more data available
+                    break
+
+            # Parse line-delimited JSON
+            for line in buffer.strip().split('\n'):
+                if line:
+                    try:
+                        events.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        print(f"Invalid JSON from container {self.node_id}: {line}: {e}")
+
+        finally:
+            # Restore blocking mode
+            self.sock.setblocking(True)
+
+        return events
 
     def shutdown(self):
         """
@@ -179,6 +285,14 @@ class DockerNode:
 
         Idempotent: Safe to call multiple times.
         """
+        # M2b: Close socket first
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except:
+                pass
+            self.sock = None
+
         if self.container is None:
             return
 
