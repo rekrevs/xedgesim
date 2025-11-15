@@ -457,11 +457,9 @@ pause
         # Read new log file content (incremental read)
         uart_output = self._read_log_file(wait_time=0.1)
 
-        # Debug: Log what we received
-        print(f"[DEBUG] Monitor response: {len(response)} bytes")
-        print(f"[DEBUG] Log file new content: {len(uart_output)} bytes")
+        # Debug logging (can be disabled in production)
         if uart_output:
-            print(f"[DEBUG] Log preview: {uart_output[:300]}")
+            print(f"[RenodeNode:{self.node_id}] Captured {len(uart_output)} bytes from UART")
 
         # Parse UART output from log file
         events = self._parse_uart_output(uart_output, target_time_us)
@@ -651,10 +649,9 @@ pause
             self.renode_process = None
 
         # Clean up script file
-        # TEMP: Keep script for debugging
-        # if self.script_path and self.script_path.exists():
-        #     self.script_path.unlink()
-        #     self.script_path = None
+        if self.script_path and self.script_path.exists():
+            self.script_path.unlink()
+            self.script_path = None
 
         print(f"[RenodeNode:{self.node_id}] Stopped")
 
