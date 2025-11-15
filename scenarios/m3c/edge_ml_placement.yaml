@@ -1,0 +1,75 @@
+# M3c Example: Edge ML Placement
+#
+# Demonstrates ML inference at edge tier using ONNX Runtime.
+# Sensor data processed locally on edge gateway.
+#
+# Expected latency: ~5-10ms (edge-local inference)
+# Use case: Low-latency anomaly detection
+
+simulation:
+  duration_s: 60
+  seed: 42
+  time_quantum_us: 1000
+
+# ML inference configuration (M3c)
+ml_inference:
+  placement: edge
+  edge_config:
+    model_path: models/anomaly_detector.onnx
+    broker_host: localhost
+    broker_port: 1883
+    threshold: 0.5
+
+nodes:
+  # Sensor node - generates vibration data
+  - id: sensor1
+    type: sensor
+    implementation: python_model
+    port: 5001
+    config:
+      sensor_type: vibration
+      sample_rate_hz: 10
+      noise_level: 0.1
+
+  # Edge gateway with ML inference container
+  - id: gateway1
+    type: gateway
+    implementation: docker
+    port: 5002
+    docker:
+      image: xedgesim/ml-inference:latest
+      build_context: containers/ml-inference
+      ports:
+        5000: 5000
+      environment:
+        MODEL_PATH: /app/models/anomaly_detector.onnx
+        MQTT_BROKER_HOST: host.docker.internal
+        MQTT_BROKER_PORT: 1883
+      volumes:
+        models:
+          bind: /app/models
+          mode: ro
+
+  # MQTT broker
+  - id: broker1
+    type: mqtt_broker
+    implementation: docker
+    port: 5003
+    docker:
+      image: xedgesim/mosquitto:latest
+      build_context: containers/mqtt-broker
+      ports:
+        1883: 1883
+
+# Network configuration (M1d)
+network:
+  model: latency
+  default_latency_us: 1000  # 1ms local network
+  default_loss_rate: 0.0
+  links:
+    - src: sensor1
+      dst: gateway1
+      latency_us: 500  # 0.5ms sensor-to-gateway
+    - src: gateway1
+      dst: broker1
+      latency_us: 100  # 0.1ms local MQTT

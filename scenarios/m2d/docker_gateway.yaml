@@ -1,0 +1,28 @@
+# M2d Example: Docker Container Gateway
+# This scenario uses a Docker container for the gateway (realistic)
+
+simulation:
+  duration_s: 10
+  seed: 42
+  time_quantum_us: 1000
+
+network:
+  model: latency
+  default_latency_us: 10000
+  default_loss_rate: 0.0
+
+nodes:
+  - id: sensor1
+    type: sensor
+    implementation: python_model
+    port: 5001
+
+  - id: gateway1
+    type: gateway
+    implementation: docker  # Docker container (realistic)
+    port: 5002
+    docker:
+      image: xedgesim/gateway:latest
+      build_context: containers/gateway
+      ports:
+        5000: 5000

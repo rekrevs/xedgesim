@@ -1,0 +1,29 @@
+# M1d Test Scenario: Latency Network Model
+#
+# This scenario tests the LatencyNetworkModel with configurable
+# per-link latency and packet loss.
+
+simulation:
+  duration_s: 2
+  seed: 42
+  time_quantum_us: 1000
+
+network:
+  model: latency
+  default_latency_us: 10000  # 10ms default
+  default_loss_rate: 0.0     # No default packet loss
+
+  links:
+    - src: sensor1
+      dst: gateway
+      latency_us: 5000      # 5ms
+      loss_rate: 0.0        # No loss
+
+nodes:
+  - id: sensor1
+    type: sensor_model
+    port: 7001
+
+  - id: gateway
+    type: gateway_model
+    port: 7004

@@ -1,0 +1,76 @@
+# M3c Example: Cloud ML Placement
+#
+# Demonstrates ML inference at cloud tier using PyTorch.
+# Sensor data forwarded to cloud for processing.
+#
+# Expected latency: ~105ms (100ms network + 5ms inference)
+# Use case: High-accuracy inference with acceptable latency
+
+simulation:
+  duration_s: 60
+  seed: 42
+  time_quantum_us: 1000
+
+# ML inference configuration (M3c)
+ml_inference:
+  placement: cloud
+  cloud_config:
+    model_path: models/anomaly_detector.pt
+    broker_host: localhost
+    broker_port: 1883
+    latency_ms: 50  # One-way cloud latency (50ms up + 50ms down)
+    threshold: 0.5
+
+nodes:
+  # Sensor node - generates vibration data
+  - id: sensor1
+    type: sensor
+    implementation: python_model
+    port: 5001
+    config:
+      sensor_type: vibration
+      sample_rate_hz: 10
+      noise_level: 0.1
+
+  # Edge gateway - forwards data to cloud (no local ML)
+  - id: gateway1
+    type: gateway
+    implementation: python_model
+    port: 5002
+    config:
+      forward_to_cloud: true
+
+  # MQTT broker
+  - id: broker1
+    type: mqtt_broker
+    implementation: docker
+    port: 5003
+    docker:
+      image: xedgesim/mosquitto:latest
+      build_context: containers/mqtt-broker
+      ports:
+        1883: 1883
+
+# Network configuration (M1d)
+network:
+  model: latency
+  default_latency_us: 1000  # 1ms local network
+  default_loss_rate: 0.0
+  links:
+    - src: sensor1
+      dst: gateway1
+      latency_us: 500  # 0.5ms sensor-to-gateway
+    - src: gateway1
+      dst: broker1
+      latency_us: 100  # 0.1ms local MQTT
+
+# Note: Cloud ML service started separately using CloudMLService Python class
+# Example:
+#   from sim.cloud.ml_service import CloudMLService
+#   service = CloudMLService(
+#       model_path="models/anomaly_detector.pt",
+#       broker_host="localhost",
+#       broker_port=1883,
+#       cloud_latency_ms=50
+#   )
+#   service.run()
