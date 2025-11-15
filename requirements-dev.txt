@@ -14,6 +14,10 @@ docker>=7.0.0
 # MQTT integration (M2c)
 paho-mqtt>=1.6.1
 
+# ML framework (M3)
+torch>=2.0.0  # For model creation and PyTorch cloud inference
+onnxruntime>=1.16.0  # For ONNX model inference
+numpy>=1.24.0  # For ML tensor operations
+
 # Future dependencies (commented out for now)
 # pandas>=2.0  # M3+: Analysis
-# numpy>=1.24  # M3+: Analysis
