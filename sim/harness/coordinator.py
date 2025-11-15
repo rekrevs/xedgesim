@@ -120,19 +120,28 @@ class Coordinator:
     - All nodes advance together in fixed time quanta
     - No node advances ahead of others
     - Simple, deterministic, easy to debug
+
+    M1c: Now uses NetworkModel abstraction for message routing.
     """
 
-    def __init__(self, time_quantum_us: int = 1000):
+    def __init__(self, time_quantum_us: int = 1000, network_model=None):
         """
         Initialize coordinator.
 
         Args:
             time_quantum_us: Time step size in microseconds (default 1ms)
+            network_model: NetworkModel instance for routing (default: DirectNetworkModel)
         """
         self.time_quantum_us = time_quantum_us
         self.current_time_us = 0
         self.nodes: Dict[str, NodeConnection] = {}
         self.pending_events: Dict[str, List[Event]] = {}  # node_id -> events
+
+        # M1c: Network model for message routing
+        if network_model is None:
+            from sim.network.direct_model import DirectNetworkModel
+            network_model = DirectNetworkModel()
+        self.network_model = network_model
 
     def add_node(self, node_id: str, host: str, port: int):
         """Register a node."""
@@ -180,8 +189,20 @@ class Coordinator:
                 events = conn.wait_done()
                 all_events.extend(events)
 
-            # Phase 3: Route cross-node messages
+            # Phase 3: Route cross-node messages via NetworkModel (M1c)
             for event in all_events:
+                # Route event through network model
+                routed_events = self.network_model.route_message(event)
+
+                # Deliver routed events to destination nodes
+                for routed_event in routed_events:
+                    if routed_event.dst and routed_event.dst in self.pending_events:
+                        self.pending_events[routed_event.dst].append(routed_event)
+
+            # Phase 3b: Collect any delayed events from network (M1c)
+            # (For DirectNetworkModel this returns [], but LatencyNetworkModel will use this)
+            delayed_events = self.network_model.advance_to(target_time_us)
+            for event in delayed_events:
                 if event.dst and event.dst in self.pending_events:
                     self.pending_events[event.dst].append(event)
 
