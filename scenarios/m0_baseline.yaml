@@ -1,0 +1,32 @@
+# M0 Baseline Scenario
+#
+# This scenario replicates the M0 proof-of-concept hardcoded configuration:
+# - 3 sensor nodes
+# - 1 gateway node
+# - 10 second simulation duration
+# - Seed 42 for deterministic execution
+#
+# Usage:
+#   python3 sim/harness/coordinator.py scenarios/m0_baseline.yaml
+
+simulation:
+  duration_s: 10
+  seed: 42
+  time_quantum_us: 1000  # 1ms time steps
+
+nodes:
+  - id: sensor1
+    type: sensor_model
+    port: 5001
+
+  - id: sensor2
+    type: sensor_model
+    port: 5002
+
+  - id: sensor3
+    type: sensor_model
+    port: 5003
+
+  - id: gateway
+    type: gateway_model
+    port: 5004

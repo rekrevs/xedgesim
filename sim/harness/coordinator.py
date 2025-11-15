@@ -22,8 +22,15 @@ This coordinator implements the core federated co-simulation algorithm:
 import socket
 import json
 import time
+import sys
+from pathlib import Path
 from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
+
+# Add project root to path for imports (M1b: needed for sim.config)
+_project_root = Path(__file__).parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 
 @dataclass
@@ -203,27 +210,62 @@ class Coordinator:
 
 
 def main():
-    """M0 hardcoded scenario: 3 sensors + 1 gateway."""
+    """
+    Run coordinator with scenario configuration.
+
+    Usage:
+        python3 coordinator.py                          # M0 hardcoded scenario
+        python3 coordinator.py scenarios/m0_baseline.yaml  # YAML scenario (M1b+)
+    """
+    import sys
 
     print("="*60)
-    print("xEdgeSim M0 Minimal Proof-of-Concept")
+    print("xEdgeSim Coordinator")
     print("="*60)
 
-    # Hardcoded configuration (no YAML parsing for M0)
-    coordinator = Coordinator(time_quantum_us=1000)  # 1ms steps
+    # Check if YAML scenario provided
+    if len(sys.argv) > 1:
+        # M1b: Load from YAML
+        scenario_path = sys.argv[1]
+        print(f"[Coordinator] Loading scenario from: {scenario_path}")
 
-    # Register nodes (must be started externally before running coordinator)
-    coordinator.add_node("sensor1", "localhost", 5001)
-    coordinator.add_node("sensor2", "localhost", 5002)
-    coordinator.add_node("sensor3", "localhost", 5003)
-    coordinator.add_node("gateway", "localhost", 5004)
+        from sim.config.scenario import load_scenario
+        scenario = load_scenario(scenario_path)
 
-    # Connect and initialize
-    coordinator.connect_all()
-    coordinator.initialize_all(seed=42)
+        # Create coordinator with scenario parameters
+        coordinator = Coordinator(time_quantum_us=scenario.time_quantum_us)
 
-    # Run for 10 seconds of virtual time
-    coordinator.run(duration_us=10_000_000)
+        # Register nodes from scenario
+        for node in scenario.nodes:
+            coordinator.add_node(node['id'], "localhost", node['port'])
+
+        # Connect and initialize
+        coordinator.connect_all()
+        coordinator.initialize_all(seed=scenario.seed)
+
+        # Run simulation
+        duration_us = int(scenario.duration_s * 1_000_000)
+        coordinator.run(duration_us=duration_us)
+
+    else:
+        # M0: Hardcoded configuration (backward compatibility)
+        print("[Coordinator] Using hardcoded M0 configuration")
+        print("[Coordinator] (Use 'python3 coordinator.py <scenario.yaml>' for YAML config)")
+
+        coordinator = Coordinator(time_quantum_us=1000)  # 1ms steps
+
+        # Register nodes (must be started externally before running coordinator)
+        coordinator.add_node("sensor1", "localhost", 5001)
+        coordinator.add_node("sensor2", "localhost", 5002)
+        coordinator.add_node("sensor3", "localhost", 5003)
+        coordinator.add_node("gateway", "localhost", 5004)
+
+        # Connect and initialize
+        coordinator.connect_all()
+        coordinator.initialize_all(seed=42)
+
+        # Run for 10 seconds of virtual time
+        coordinator.run(duration_us=10_000_000)
 
     print("\n[Coordinator] Done! Check CSV files for metrics.")
 

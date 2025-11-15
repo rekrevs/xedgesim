@@ -174,7 +174,7 @@ We will achieve these through minor stages:
 | Minor Stage | Status | Commit | Report |
 |-------------|--------|--------|--------|
 | M1a: Test reorg | ✅ COMPLETE | M1a | M1a-report.md |
-| M1b: YAML parser | PENDING | - | - |
+| M1b: YAML parser | ✅ COMPLETE | M1b | M1b-report.md |
 | M1c: Network abstraction | PENDING | - | - |
 | M1d: Latency model | PENDING | - | - |
 | M1e: Metrics | PENDING | - | - |
@@ -193,4 +193,13 @@ We will achieve these through minor stages:
 - pytest configuration added
 - Integration test framework created
 - Ready for M1b (YAML parsing)
+
+
+### M1b ✅
+- YAML scenario parser implemented
+- Unit tests: 8/8 passed
+- Integration tests: 2/2 passed
+- M0 backward compatibility verified
+- Determinism maintained with YAML configs
+- Ready for M1c (Network Abstraction)
 

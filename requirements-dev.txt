@@ -4,7 +4,9 @@
 pytest>=7.0.0
 pytest-cov>=4.0.0
 
+# Configuration (M1b)
+pyyaml>=6.0
+
 # Future dependencies (commented out for now)
-# pyyaml>=6.0  # M1b: YAML parsing
 # pandas>=2.0  # M3+: Analysis
 # numpy>=1.24  # M3+: Analysis

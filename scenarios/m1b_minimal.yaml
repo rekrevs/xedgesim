@@ -1,0 +1,23 @@
+# M1b Minimal Test Scenario
+#
+# Minimal scenario for testing YAML parsing:
+# - 1 sensor node
+# - 1 gateway node
+# - Short duration for fast tests
+#
+# Usage:
+#   python3 sim/harness/coordinator.py scenarios/m1b_minimal.yaml
+
+simulation:
+  duration_s: 2
+  seed: 123
+  time_quantum_us: 1000
+
+nodes:
+  - id: sensor1
+    type: sensor_model
+    port: 5001
+
+  - id: gateway
+    type: gateway_model
+    port: 5004
