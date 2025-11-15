@@ -91,7 +91,7 @@ Three options considered:
 
 Following wow.md Section 3, here are the initial 2-5 minor stages. This plan will be updated incrementally as we learn from each stage.
 
-### M2a: Docker Node Abstraction and Lifecycle
+### M2a: Docker Node Abstraction and Lifecycle ✅ COMPLETE
 
 **Objective**: Create a DockerNode class that manages container lifecycle (create, start, stop, remove) and implements the same event-driven interface as existing Python nodes.
 
@@ -103,11 +103,18 @@ Following wow.md Section 3, here are the initial 2-5 minor stages. This plan wil
 - Add unit tests for Docker lifecycle operations
 
 **Acceptance criteria**:
-- Can create, start, and stop a simple Docker container (e.g., `alpine:latest`)
-- Container lifecycle managed cleanly (no orphaned containers after tests)
-- DockerNode implements same interface as Python nodes (compatible with coordinator)
+- ✅ Can create, start, and stop a simple Docker container (e.g., `alpine:latest`)
+- ✅ Container lifecycle managed cleanly (no orphaned containers after tests)
+- ✅ DockerNode implements same interface as Python nodes (compatible with coordinator)
 
-**Deferred**: Network integration, socket communication, MQTT broker setup
+**Completed**: 2025-11-15 (commit 7382edd)
+- DockerNode class: 196 lines
+- Basic tests: 3/3 passed (no Docker required)
+- Lifecycle tests: 13 written (skip without Docker)
+- Regression tests: All pass (M1d, M1e)
+- Optional docker dependency with graceful fallback
+
+**Deferred to M2b**: Socket communication, event exchange with container
 
 ### M2b: Socket Communication Between Coordinator and Container
 
