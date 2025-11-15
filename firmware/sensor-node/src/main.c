@@ -144,7 +144,45 @@ int main(void)
 	       (double)SENSOR_MIN_VALUE, (double)SENSOR_MAX_VALUE);
 	printk("\nStarting sensor loop...\n\n");
 
-	/* Main sensor sampling loop */
+#ifdef CONFIG_XEDGESIM_EMULATION
+	/*
+	 * xEdgeSim Emulation Mode
+	 *
+	 * Deterministic behavior for coordinator time-stepping tests:
+	 * - Emit exactly N samples at 1-second intervals
+	 * - Use k_sleep instead of k_usleep for better Renode compatibility
+	 * - Guaranteed one JSON event per second
+	 */
+	printk("*** EMULATION MODE: Deterministic sampling ***\n");
+
+	#define NUM_SAMPLES 10
+
+	for (int sample_idx = 0; sample_idx < NUM_SAMPLES; sample_idx++) {
+		/* Generate deterministic sample value */
+		float value = generate_sensor_sample();
+
+		/* Output JSON event with exact timestamp */
+		output_json_event("SAMPLE", value, current_time_us);
+
+		/* Sleep for exactly 1 second */
+		k_sleep(K_SECONDS(1));
+
+		/* Advance virtual time by exactly 1 second */
+		current_time_us += SAMPLE_INTERVAL_US;
+	}
+
+	printk("*** EMULATION MODE: %d samples emitted, entering idle ***\n", NUM_SAMPLES);
+
+	/* After emitting samples, sleep forever */
+	while (1) {
+		k_sleep(K_FOREVER);
+	}
+#else
+	/*
+	 * Production Mode
+	 *
+	 * Real sensor sampling loop for hardware deployment
+	 */
 	while (1) {
 		/* Generate sensor sample */
 		float value = generate_sensor_sample();
@@ -158,6 +196,7 @@ int main(void)
 		/* Advance virtual time */
 		current_time_us += SAMPLE_INTERVAL_US;
 	}
+#endif
 
 	return 0;
 }

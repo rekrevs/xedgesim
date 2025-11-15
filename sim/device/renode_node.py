@@ -33,6 +33,7 @@ import subprocess
 import time
 import json
 import re
+import select
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass, asdict
@@ -125,9 +126,11 @@ class RenodeNode:
         self.renode_process: Optional[subprocess.Popen] = None
         self.monitor_socket: Optional[socket.socket] = None
         self.script_path: Optional[Path] = None
+        self.log_file_path: Optional[Path] = None
 
         # UART buffer for incomplete lines
         self.uart_buffer = ""
+        self.log_file_position = 0  # Track position in log file for incremental reads
 
     def _validate_config(self):
         """
@@ -254,9 +257,12 @@ machine LoadPlatformDescription @{self.platform_file.absolute()}
 # Load firmware ELF
 sysbus LoadELF @{self.firmware_path.absolute()}
 
-# Configure UART analyzer (for output capture)
-# This allows us to see UART output in Renode's console
+# Configure UART analyzer (for output capture in GUI mode)
 showAnalyzer {self.uart_device}
+
+# Configure UART file backend (captures actual UART data to file)
+# The 'true' parameter enables immediate flushing
+{self.uart_device} CreateFileBackend @{self.working_dir.absolute()}/uart_data.txt true
 
 # Configure external time source (for coordinator control)
 # Quantum: minimum time step in virtual seconds
@@ -266,6 +272,11 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
 # the start command from working properly. Instead, we control time
 # advancement explicitly using start followed by RunFor commands.
 
+# Start emulation briefly to boot firmware, then pause for time-stepping
+# This allows firmware to initialize before coordinator takes control
+start
+pause
+
 # Ready for time stepping from coordinator
 """
 
@@ -274,7 +285,11 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
         with open(script_path, 'w') as f:
             f.write(script_content)
 
+        # Set UART data file path (will be created by Renode's CreateFileBackend)
+        self.log_file_path = self.working_dir / 'uart_data.txt'
+
         print(f"[RenodeNode:{self.node_id}] Created script: {script_path}")
+        print(f"[RenodeNode:{self.node_id}] UART data will be written to: {self.log_file_path}")
         return script_path
 
     def _connect_monitor(self, max_retries: int = 3, retry_delay: float = 1.0):
@@ -371,7 +386,10 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
                 response += chunk
 
                 # Check if we have the prompt (indicates command complete)
-                if b'(monitor)' in response:
+                # Prompt can be (monitor) or (machine_name) depending on context
+                # After script runs, prompt changes to (node_id)
+                machine_prompt = f'({self.node_id})'.encode('utf-8')
+                if b'(monitor)' in response or machine_prompt in response:
                     break
 
             except socket.timeout:
@@ -435,8 +453,18 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
 
         response = self._send_command(cmd, timeout=30.0)
 
-        # Parse UART output from response
-        events = self._parse_uart_output(response, target_time_us)
+        # UART output is written to log file by Renode's logFile command
+        # Read new log file content (incremental read)
+        uart_output = self._read_log_file(wait_time=0.1)
+
+        # Debug: Log what we received
+        print(f"[DEBUG] Monitor response: {len(response)} bytes")
+        print(f"[DEBUG] Log file new content: {len(uart_output)} bytes")
+        if uart_output:
+            print(f"[DEBUG] Log preview: {uart_output[:300]}")
+
+        # Parse UART output from log file
+        events = self._parse_uart_output(uart_output, target_time_us)
 
         # Update current time
         self.current_time_us = target_time_us
@@ -464,6 +492,46 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
             100 us → 0.0001 s
         """
         return time_us / 1_000_000.0
+
+    def _read_log_file(self, wait_time: float = 0.1) -> str:
+        """
+        Read new content from Renode UART log file.
+
+        Reads only content added since last read (using file position tracking).
+        This captures UART output that Renode writes via the 'logFile' command.
+
+        Args:
+            wait_time: Time to wait for log file to be written (seconds)
+
+        Returns:
+            String containing new log content since last read
+        """
+        if not self.log_file_path:
+            return ""
+
+        # Wait a bit for Renode to write to log file
+        time.sleep(wait_time)
+
+        try:
+            # Check if log file exists yet
+            if not self.log_file_path.exists():
+                return ""
+
+            # Open and seek to last position
+            with open(self.log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                f.seek(self.log_file_position)
+                new_content = f.read()
+                # Update position for next read
+                self.log_file_position = f.tell()
+
+            return new_content
+
+        except Exception as e:
+            print(
+                f"[RenodeNode:{self.node_id}] "
+                f"Warning: Error reading log file: {e}"
+            )
+            return ""
 
     def _parse_uart_output(
         self,
@@ -583,9 +651,10 @@ emulation SetGlobalQuantum "{self.time_quantum_us / 1_000_000.0}"
             self.renode_process = None
 
         # Clean up script file
-        if self.script_path and self.script_path.exists():
-            self.script_path.unlink()
-            self.script_path = None
+        # TEMP: Keep script for debugging
+        # if self.script_path and self.script_path.exists():
+        #     self.script_path.unlink()
+        #     self.script_path = None
 
         print(f"[RenodeNode:{self.node_id}] Stopped")
 

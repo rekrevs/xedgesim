@@ -1,0 +1,18 @@
+# xEdgeSim Sensor Node Configuration
+
+config XEDGESIM_EMULATION
+	bool "xEdgeSim emulation mode"
+	default n
+	help
+	  Enable deterministic emulation mode for xEdgeSim coordinator testing.
+
+	  When enabled:
+	  - Firmware emits exactly 10 samples at 1-second intervals
+	  - Uses k_sleep(K_SECONDS(1)) for reliable time-stepping
+	  - Guaranteed one JSON event per second for coordinator validation
+
+	  When disabled (production mode):
+	  - Normal sensor sampling loop with k_usleep
+	  - Infinite sampling for hardware deployment
+
+source "Kconfig.zephyr"

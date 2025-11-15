@@ -208,7 +208,7 @@ class InProcessNodeAdapter(NodeAdapter):
         coordinator_events = []
         for event in events:
             coordinator_events.append(Event(
-                time_us=event.time,
+                time_us=event.time_us,
                 type=event.type,
                 src=self.node_id,
                 dst=None,  # Device events broadcast to network
