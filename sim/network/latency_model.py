@@ -133,7 +133,13 @@ class LatencyNetworkModel(NetworkModel):
             src=event.src,
             dst=event.dst,
             payload=event.payload,
-            size_bytes=event.size_bytes
+            size_bytes=event.size_bytes,
+            network_metadata={
+                'latency_us': latency_us,
+                'sent_time_us': event.time_us,
+                'delivery_time_us': delivery_time_us,
+                'loss_rate': loss_rate
+            }
         )
 
         # Store latency with event for metrics tracking

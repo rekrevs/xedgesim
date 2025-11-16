@@ -34,20 +34,18 @@ import time
 import json
 import re
 import select
+import sys
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from dataclasses import dataclass, asdict
 
+# Add project root to path for imports
+_project_root = Path(__file__).parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
-@dataclass
-class Event:
-    """Simulation event from device firmware."""
-    type: str              # Event type (e.g., "SAMPLE", "UART", "METRIC")
-    time_us: int          # Event time in microseconds (virtual time)
-    src: str              # Source node ID
-    dst: Optional[str] = None         # Destination node ID (optional)
-    payload: Optional[Any] = None     # Event payload (varies by type)
-    size_bytes: int = 0   # Payload size in bytes
+# Use coordinator's Event class for consistency
+from sim.harness.coordinator import Event
 
 
 class RenodeConnectionError(Exception):
@@ -612,10 +610,10 @@ pause
                 # Get event timestamp
                 event_time_us = data.get('time', to_time_us)
 
-                # Create event from JSON
+                # Create event from JSON (using coordinator's Event class)
                 event = Event(
-                    type=data.get('type', 'UART'),
                     time_us=event_time_us,
+                    type=data.get('type', 'UART'),
                     src=self.node_id,
                     dst=data.get('dst'),
                     payload=data,

@@ -43,6 +43,12 @@ class Event:
     dst: str = None
     payload: Any = None
     size_bytes: int = 0
+    network_metadata: dict = None  # M3i: Latency, loss, routing info
+
+    def __post_init__(self):
+        """Initialize mutable defaults."""
+        if self.network_metadata is None:
+            self.network_metadata = {}
 
 
 class NodeAdapter(ABC):
@@ -269,6 +275,17 @@ class Coordinator:
             node_instance: Instance of node class (e.g., RenodeNode)
         """
         self.nodes[node_id] = InProcessNodeAdapter(node_id, node_instance)
+        self.pending_events[node_id] = []
+
+    def add_adapter(self, node_id: str, adapter: NodeAdapter):
+        """
+        Register a custom node adapter (M3h: protocol-based containers).
+
+        Args:
+            node_id: Node identifier
+            adapter: Custom NodeAdapter instance (e.g., DockerProtocolAdapter)
+        """
+        self.nodes[node_id] = adapter
         self.pending_events[node_id] = []
 
     def connect_all(self):

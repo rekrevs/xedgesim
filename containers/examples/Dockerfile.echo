@@ -1,0 +1,21 @@
+# Dockerfile for Echo Service
+# Demonstrates containerized service using protocol adapter
+
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy protocol adapter and echo service
+COPY containers/protocol_adapter.py /app/containers/
+COPY containers/__init__.py /app/containers/
+COPY containers/examples/__init__.py /app/containers/examples/
+COPY containers/examples/echo_service.py /app/containers/examples/
+COPY containers/examples/service_wrapper.py /app/service.py
+
+# Set PYTHONPATH to find containers module
+ENV PYTHONPATH=/app
+
+# Keep container running
+# DockerProtocolAdapter will use 'docker exec' to run the service
+CMD ["tail", "-f", "/dev/null"]
