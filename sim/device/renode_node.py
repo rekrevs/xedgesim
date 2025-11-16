@@ -131,6 +131,9 @@ class RenodeNode:
         self.log_file_position = 0  # Track position in log file for incremental reads
         self.event_buffer = []  # Buffer for events from future time steps
 
+        # M3la: Queue for incoming events to be injected
+        self.pending_events_queue = []  # Events to inject via UART in next advance()
+
     def _validate_config(self):
         """
         Validate configuration has required keys and files exist.
@@ -437,6 +440,16 @@ pause
         # Calculate time delta
         delta_us = target_time_us - self.current_time_us
 
+        # M3la: INJECT PENDING EVENTS BEFORE ADVANCING TIME
+        # This allows firmware to process incoming events during this time step
+        if self.pending_events_queue:
+            print(
+                f"[RenodeNode:{self.node_id}] "
+                f"Injecting {len(self.pending_events_queue)} incoming event(s)..."
+            )
+            self._inject_events_via_uart(self.pending_events_queue)
+            self.pending_events_queue = []  # Clear after injection
+
         # Convert to Renode virtual seconds
         virtual_seconds = self._us_to_virtual_seconds(delta_us)
 
@@ -639,6 +652,93 @@ pause
                 # Continue parsing other lines
 
         return events
+
+    def set_pending_events(self, events: List[Event]):
+        """
+        Queue events for delivery to firmware in next advance() call (M3la).
+
+        Events will be injected via UART stdin before the time step runs,
+        allowing firmware to process incoming commands/data.
+
+        Args:
+            events: List of Event objects to inject into firmware
+
+        Note:
+            - Events replace any previously queued events (not accumulated)
+            - Events are injected as JSON lines via UART WriteChar commands
+            - Firmware must implement JSON parsing to receive these events
+        """
+        # Replace pending events (don't accumulate across advance cycles)
+        self.pending_events_queue = list(events)
+
+        if events:
+            print(
+                f"[RenodeNode:{self.node_id}] "
+                f"Queued {len(events)} event(s) for injection"
+            )
+
+    def _inject_events_via_uart(self, events: List[Event]):
+        """
+        Inject events into Renode firmware via UART stdin (M3la).
+
+        Sends each event as a JSON line via monitor WriteChar commands.
+        The firmware should read these from UART and parse as JSON.
+
+        Args:
+            events: List of Event objects to inject
+
+        Implementation:
+            - Converts each event to JSON dict
+            - Sends JSON string character-by-character via UART WriteChar
+            - Appends newline (0x0A) to complete the message
+
+        Example JSON format:
+            {"type":"COMMAND","src":"edge1","dst":"sensor1","payload":{...},"time":1000000}
+        """
+        for event in events:
+            # Convert Event to JSON dict (matching the format firmware expects)
+            event_dict = {
+                'type': event.type,
+                'src': event.src if event.src else '',
+                'dst': event.dst if event.dst else '',
+                'payload': event.payload if event.payload else {},
+                'time': event.time_us
+            }
+
+            # Serialize to JSON string
+            event_json = json.dumps(event_dict)
+
+            print(
+                f"[RenodeNode:{self.node_id}] "
+                f"Injecting event via UART: {event_json[:100]}..."
+            )
+
+            # Send each character via UART WriteChar command
+            # This simulates typing into the UART terminal
+            for char in event_json:
+                cmd = f'{self.uart_device} WriteChar {ord(char)}'
+                try:
+                    self._send_command(cmd, timeout=5.0)
+                except (RenodeTimeoutError, RenodeConnectionError) as e:
+                    print(
+                        f"[RenodeNode:{self.node_id}] "
+                        f"Warning: Failed to inject character '{char}': {e}"
+                    )
+                    # Continue trying to inject rest of message
+
+            # Send newline to complete the JSON message
+            try:
+                self._send_command(f'{self.uart_device} WriteChar 10', timeout=5.0)  # \n = ASCII 10
+            except (RenodeTimeoutError, RenodeConnectionError) as e:
+                print(
+                    f"[RenodeNode:{self.node_id}] "
+                    f"Warning: Failed to inject newline: {e}"
+                )
+
+            print(
+                f"[RenodeNode:{self.node_id}] "
+                f"Event injected successfully"
+            )
 
     def stop(self):
         """

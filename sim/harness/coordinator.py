@@ -195,12 +195,16 @@ class InProcessNodeAdapter(NodeAdapter):
         """
         Advance the in-process node to target time.
 
-        Note: pending_events are currently ignored for in-process nodes.
-        M3fc focuses on device-tier emulation which doesn't receive events
-        from other nodes. Future stages can extend this.
+        M3la: Now passes pending_events to the node for bidirectional communication.
+        Events will be injected into the node (e.g., via UART for Renode nodes).
         """
         self.current_time_us = target_time_us
-        # Note: pending_events handling can be added if needed in future
+
+        # M3la: Pass events to node for injection
+        # Check if node supports set_pending_events (RenodeNode does)
+        if hasattr(self.node, 'set_pending_events'):
+            self.node.set_pending_events(pending_events)
+        # else: Node doesn't support incoming events, which is fine
 
     def wait_done(self) -> List[Event]:
         """
@@ -213,12 +217,15 @@ class InProcessNodeAdapter(NodeAdapter):
         # Convert node-specific events to coordinator Event format
         coordinator_events = []
         for event in events:
+            # Handle both old format (.time) and new format (.time_us)
+            event_time = getattr(event, 'time_us', getattr(event, 'time', self.current_time_us))
+
             coordinator_events.append(Event(
-                time_us=event.time_us,
-                type=event.type,
+                time_us=event_time,
+                type=getattr(event, 'type', 'UNKNOWN'),
                 src=self.node_id,
-                dst=None,  # Device events broadcast to network
-                payload={'value': event.value} if hasattr(event, 'value') else None,
+                dst=getattr(event, 'dst', None),  # M3la: Support destination routing
+                payload={'value': event.value} if hasattr(event, 'value') else getattr(event, 'payload', None),
                 size_bytes=64  # Assume small JSON payload
             ))
 
