@@ -69,3 +69,36 @@ The code review highlighted foundational gaps around orchestration, deterministi
 **Developer guidance:** Treat this sprint as a stabilization gate—no new simulators, just polish. Ensure every scenario is runnable via CI and produces artefacts archived under `results/` for future paper figures.
 
 > **Note:** ns-3 integration remains deferred until the above sprints demonstrate a solid, testable baseline. Once M3o passes, we can reintroduce the packet-level network work with clearer requirements and lower risk.
+
+---
+
+## Progress Tracking
+
+### M3l — Bidirectional Device ↔ Network ↔ Edge Flow
+
+**Status:** IN PROGRESS
+
+#### M3la: Fix Renode Incoming Event Delivery ✅ COMPLETE
+- **Completed:** 2025-11-16
+- **Commit:** 9ab01b8
+- **Summary:** Implemented event delivery infrastructure allowing in-process Renode nodes to receive events from coordinator
+- **Changes:**
+  - Modified `InProcessNodeAdapter` to pass pending_events to nodes
+  - Added `RenodeNode.set_pending_events()` and `_inject_events_via_uart()`
+  - 20 unit tests + 44 regression tests passing
+- **Report:** [docs/dev-log/M3la-report.md](M3la-report.md)
+- **Remaining Work:** M3lb (translation layer), M3lc (end-to-end testing with real Renode)
+
+#### M3lb: Create UART-Event Translation Layer ⏸️ PENDING
+- **Goal:** Enable firmware to route events to specific destinations
+- **Tasks:**
+  - Extend UART JSON parsing for destination field
+  - Create UART↔MQTT translation utilities
+  - Test event routing
+
+#### M3lc: Test Bidirectional Device-Edge Flow ⏸️ PENDING
+- **Goal:** End-to-end integration testing with real Renode
+- **Tasks:**
+  - Integration test: Renode → Network → Docker → back to Renode
+  - Validate determinism across bidirectional flows
+  - **Requires:** Testing agent (Docker + Renode)
